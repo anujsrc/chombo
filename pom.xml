@@ -86,13 +86,13 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/ma
 
         <dependency>
             <groupId>org.codehaus.jackson</groupId>
-            <artifactId>jackson-core-lgpl </artifactId>
+            <artifactId>jackson-core-asl </artifactId>
             <version>${jackson.version}</version>
         </dependency>
 
         <dependency>
             <groupId>org.codehaus.jackson</groupId>
-            <artifactId>jackson-mapper-lgpl </artifactId>
+            <artifactId>jackson-mapper-asl </artifactId>
             <version>${jackson.version}</version>
         </dependency>
 
