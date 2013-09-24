@@ -253,9 +253,12 @@ public class Utility {
      */
     public static InputStream getFileStream(Configuration conf, String pathConfig) throws IOException {
         String filePath = conf.get(pathConfig);
-        FileSystem dfs = FileSystem.get(conf);
-        Path src = new Path(filePath);
-        FSDataInputStream fs = dfs.open(src);
+        FSDataInputStream fs = null;
+        if (null != filePath) {
+        	FileSystem dfs = FileSystem.get(conf);
+        	Path src = new Path(filePath);
+        	fs = dfs.open(src);
+        }
         return fs;
     }
     
@@ -269,17 +272,38 @@ public class Utility {
     public static List<String[]> parseFileLines(Configuration conf, String filePathParam, String fieldDelimRegex) throws IOException {
     	List<String[]> lines = new ArrayList<String[]>();
     	InputStream fs = getFileStream(conf, filePathParam);
-    	BufferedReader reader = new BufferedReader(new InputStreamReader(fs));
-    	String line = null; 
-    	String[] items = null;
+    	if (null != fs) {
+    		BufferedReader reader = new BufferedReader(new InputStreamReader(fs));
+    		String line = null; 
+    		String[] items = null;
     	
-    	while((line = reader.readLine()) != null) {
-    		items = line.split(fieldDelimRegex);
-    		lines.add(items);
+    		while((line = reader.readLine()) != null) {
+    			items = line.split(fieldDelimRegex);
+    			lines.add(items);
+    		}
     	}
     	return lines;
     }
     
+    /**
+     * @param conf
+     * @param filePathParam
+     * @return
+     * @throws IOException
+     */
+    public static List<String> getFileLines(Configuration conf, String filePathParam) throws IOException {
+    	List<String> lines = new ArrayList<String>();
+    	InputStream fs = getFileStream(conf, filePathParam);
+    	if (null != fs) {
+    		BufferedReader reader = new BufferedReader(new InputStreamReader(fs));
+    		String line = null; 
+    		while((line = reader.readLine()) != null) {
+    			lines.add(line);
+    		}
+    	}
+    	return lines;
+    }
+
     /**
      * @param text
      * @param analyzer
@@ -359,6 +383,20 @@ public class Utility {
     	return data;
     }
     
+    /**
+     * @param record
+     * @param delimRegex
+     * @return
+     */
+    public static double[] doubleArrayFromString(String record, String delimRegex ) {
+    	String[] items = record.split(delimRegex);
+    	double[] data = new double[items.length];
+    	for (int i = 0; i < items.length; ++i) {
+    		data[i] = Double.parseDouble(items[i]);
+    	}
+    	return data;
+    }
+
     /**
      * @param items
      * @param fields

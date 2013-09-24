@@ -18,27 +18,22 @@
 
 package org.chombo.util;
 
-/**
- * Tabular data structure
- * @author pranab
- *
- */
-public class TabularData {
-	protected int[][] table;
+public class DoubleTable {
+	protected double[][] table;
 	protected int numRow;
 	protected int numCol;
 	protected String[] rowLabels;
 	protected String[] colLabels;
 	protected static final String DELIMETER = ",";
 	
-	public TabularData() {
+	public DoubleTable() {
 	}
 	
 	/**
 	 * @param numRow
 	 * @param numCol
 	 */
-	public TabularData(int numRow, int numCol) {
+	public DoubleTable(int numRow, int numCol) {
 		initialize( numRow,  numCol);
 	}
 	
@@ -46,7 +41,7 @@ public class TabularData {
 	 * @param rowLabels
 	 * @param colLabels
 	 */
-	public TabularData(String[] rowLabels, String[] colLabels) {
+	public DoubleTable(String[] rowLabels, String[] colLabels) {
 		initialize( rowLabels.length,  colLabels.length);
 		setLabels(rowLabels, colLabels); 
 	}
@@ -56,7 +51,7 @@ public class TabularData {
 	 * @param numCol
 	 */
 	public void  initialize(int numRow, int numCol) {
-		table = new int[numRow][numCol];
+		table = new double[numRow][numCol];
 		for (int r = 0; r < numRow; ++r) {
 			for (int c = 0; c < numCol; ++c) {
 				table[r][c] = 0;
@@ -80,7 +75,7 @@ public class TabularData {
 	 * @param col
 	 * @param val
 	 */
-	public void set(int row, int col, int val) {
+	public void set(int row, int col, double val) {
 		table[row][col] = val;
 	}
 	
@@ -89,7 +84,7 @@ public class TabularData {
 	 * @param col
 	 * @return
 	 */
-	public int get(int row, int col) {
+	public double get(int row, int col) {
 		return table[row][col];
 	}
 
@@ -97,7 +92,7 @@ public class TabularData {
 	 * @param row
 	 * @return
 	 */
-	public int[] getRow(int row) {
+	public double[] getRow(int row) {
 		return table[row];
 	}
 	
@@ -106,7 +101,7 @@ public class TabularData {
 	 * @param col
 	 * @param val
 	 */
-	public void add(int row, int col, int val) {
+	public void add(int row, int col, double val) {
 		table[row][col] += val;
 	}
 
@@ -116,7 +111,7 @@ public class TabularData {
 	 * @param colLabel
 	 * @param val
 	 */
-	public void add(String rowLabel, String colLabel, int val) {
+	public void add(String rowLabel, String colLabel, double val) {
 		int[] rowCol = getRowCol(rowLabel, colLabel);
 		table[rowCol[0]][rowCol[1]] += val;
 	}
@@ -145,8 +140,8 @@ public class TabularData {
 	 * @param row
 	 * @return
 	 */
-	public int getRowSum(int row) {
-		int sum = 0;
+	public double getRowSum(int row) {
+		double sum = 0;
 		for (int c = 0; c < numCol; ++c) {
 			sum += table[row][c];
 		}
@@ -158,8 +153,8 @@ public class TabularData {
 	 * @param col
 	 * @return
 	 */
-	public int getColumnSum(int col) {
-		int sum = 0;
+	public double getColumnSum(int col) {
+		double sum = 0;
 		for (int r = 0; r < numRow; ++r) {
 			sum += table[r][col];
 		}
@@ -204,7 +199,7 @@ public class TabularData {
 		int k = 0;
 		for (int r = 0; r < numRow; ++r) {
 			for (int c = 0; c < numCol; ++c) {
-				table[r][c]  = Integer.parseInt(items[k++]);
+				table[r][c]  = Double.parseDouble(items[k++]);
 			}
 		}
 	}
@@ -218,7 +213,7 @@ public class TabularData {
 		String[] items = data.split(DELIMETER);
 		int k = 0;
 		for (int c = 0; c < numCol; ++c) {
-			table[row][c]  = Integer.parseInt(items[k++]);
+			table[row][c]  = Double.parseDouble(items[k++]);
 		}
 	}
 	
