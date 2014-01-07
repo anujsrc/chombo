@@ -15,37 +15,22 @@
  * permissions and limitations under the License.
  */
 
-package org.chombo.mr;
+package org.chombo.util;
 
 /**
- * Field for feature attribute and class attribute
  * @author pranab
  *
  */
-public class FeatureField extends HistogramField implements  Comparable<FeatureField>{
-	protected boolean  feature;
-	protected int maxSplit;
-
-	public boolean isFeature() {
-		return feature;
+public class SimpleStat {
+	private double sum;
+	private int count;
+	
+	public void add(double value) {
+		sum +=  value;
+		++count;
 	}
-
-	public void setFeature(boolean feature) {
-		this.feature = feature;
+	
+	public double getMean() {
+		return sum / count;
 	}
-
-	public int getMaxSplit() {
-		return maxSplit;
-	}
-
-	public void setMaxSplit(int maxSplit) {
-		this.maxSplit = maxSplit;
-	}
-
-	@Override
-	public int compareTo(FeatureField that) {
-		int ret = this.ordinal < that.ordinal ? -1 : (this.ordinal == that.ordinal? 0 : 1);
-		return ret;
-	}
-
 }

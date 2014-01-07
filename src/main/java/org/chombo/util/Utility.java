@@ -69,9 +69,9 @@ public class Utility {
 	public  static final Integer ONE = 1;
 	
 	private static Pattern s3pattern = Pattern.compile("s3n:/+([^/]+)/+(.*)");
-    static AmazonS3 s3 = null;
     /*
-	static {
+    static AmazonS3 s3 = null;
+ 	static {
 		try {	
 			s3 = new AmazonS3Client(new PropertiesCredentials(Utility.class.getResourceAsStream("AwsCredentials.properties")));
 		}
@@ -193,9 +193,7 @@ public class Utility {
         matcher.matches();
         String bucket = matcher.group(1);
         String key = matcher.group(2);
-        if (null == s3) {
-			s3 = new AmazonS3Client(new PropertiesCredentials(Utility.class.getResourceAsStream("AwsCredentials.properties")));
-        }
+		AmazonS3 s3 = new AmazonS3Client(new PropertiesCredentials(Utility.class.getResourceAsStream("AwsCredentials.properties")));
         
         S3Object object = s3.getObject(new GetObjectRequest(bucket, key));
         InputStream is = object.getObjectContent();
@@ -442,7 +440,38 @@ public class Utility {
     	}
     	return extractedFields;
     }
+    
+    /**
+     * @param from
+     * @param toBeRemoved
+     * @return
+     */
+    public static  int[] removeItems(int[] from, int[] toBeRemoved) {
+    	int[] subtracted = null;
+    	List<Integer> subtractedList = new ArrayList<Integer>();
+    	
+    	for (int i = 0; i < from.length; ++i) {
+    		int item = from[i];
+    		if (!ArrayUtils.contains(toBeRemoved, item)) {
+    			subtractedList.add(item);
+    		}
+    	}
+    	subtracted = fromListToIntArray(subtractedList);
+    	return subtracted;
+    }
   
+    /**
+     * @param valueList
+     * @return
+     */
+    public static int[] fromListToIntArray(List<Integer> valueList) {
+		int[] values = new int[valueList.size()];
+		for (int i = 0; i < valueList.size(); ++i) {
+			values[i] = valueList.get(i);
+		}
+		return values;
+    }
+    
     /**
      * @param list
      * @return
@@ -517,6 +546,25 @@ public class Utility {
 		for (int c = 0; c < numCol; ++c) {
 				table[row][c]  = Integer.parseInt(items[k++]);
 		}
+	}
+	
+	/**
+	 * Returns sibling path
+	 * @param path
+	 * @param sibling
+	 * @return
+	 */
+	public static String getSiblingPath(String path, String sibling) {
+		int pos = path.lastIndexOf('/');
+		return path.substring(0, pos + 1) + sibling;
+	}
+	
+	/**
+	 * @param data
+	 * @return
+	 */
+	public static boolean isBlank(String data) {
+		return data == null || data.isEmpty();
 	}
 
 }
