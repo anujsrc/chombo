@@ -86,6 +86,28 @@ public  class ConfigUtility {
 		}
 		return val;
 	}
+
+	/**
+	 * @param conf
+	 * @param key
+	 * @return
+	 */
+	public static long getLong(Map conf,String key) {
+		long val = 0;
+		Object obj = conf.get(key);
+		if (null != obj) {
+			if (obj instanceof Long) {
+				val = (Long)obj;
+			} else if (obj instanceof String) {
+				val = Long.parseLong((String)obj);
+			} else {
+				throw new IllegalArgumentException("String value not found  in configuration  for " + key);
+			}
+		} else {
+			throw new IllegalArgumentException("Nothing found in configuration for " + key);
+		}
+		return val;
+	}
 	
 	/**
 	 * @param conf
@@ -103,6 +125,22 @@ public  class ConfigUtility {
 		return val;
 	}
 	
+	/**
+	 * @param conf
+	 * @param key
+	 * @param def
+	 * @return
+	 */
+	public static long getLong(Map conf,String key, long def) {
+		long val = 0;
+		try {
+			val = getLong(conf,  key);
+		} catch (Exception ex) {
+			val = def;
+		}
+		return val;
+	}
+
 	/**
 	 * @param conf
 	 * @param key

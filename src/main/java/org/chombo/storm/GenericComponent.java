@@ -20,9 +20,14 @@ package org.chombo.storm;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
+import org.apache.log4j.Logger;
+
+import backtype.storm.Constants;
 import backtype.storm.topology.OutputFieldsDeclarer;
 import backtype.storm.tuple.Fields;
+import backtype.storm.tuple.Tuple;
 
 /**
  * Mother of all base classes
@@ -37,11 +42,14 @@ public class GenericComponent {
 	protected  boolean debugOn;
 	protected long messageCounter;
 	protected int messageCountInterval;
+	protected String ID;
+	private static final Logger LOG = Logger.getLogger(GenericComponent.class);
 	
 	/**
 	 * 
 	 */
 	public GenericComponent() {
+		ID = UUID.randomUUID().toString().replaceAll("-", "");
 	}
 	
 	/**
@@ -49,6 +57,10 @@ public class GenericComponent {
 	 */
 	public GenericComponent(String...  fieldNames) {
 		this.fieldNames = fieldNames;
+	}
+
+	public String getID() {
+		return ID;
 	}
 
 	/**
@@ -78,6 +90,8 @@ public class GenericComponent {
 	protected void collectStreams() {
 		//collect all streams
 		if (null != streamFields) {
+			if(debugOn)
+				LOG.info("number of streams:" +streamFields.size());
 			streams = new String[streamFields.size()];
 			int i = 0;
 			for (String stream : streamFields.keySet()) {
@@ -93,6 +107,8 @@ public class GenericComponent {
 		Fields fieldsObj = null;
 		if (null == streamFields) {
 			//default field declaration
+			if (debugOn)
+				LOG.info("declaring output fields for default stream");
 			if (null != fieldNames) {
 				fieldsObj = new Fields(Arrays.asList(fieldNames));
 				declarer.declare(fieldsObj);
@@ -100,10 +116,17 @@ public class GenericComponent {
 		} else {
 			//stream specific field declaration
 			for (String stream : streamFields.keySet()) {
+				if (debugOn)
+					LOG.info("declaring output fields for specified  stream:" + stream);
 				fieldsObj = new Fields(Arrays.asList(streamFields.get(stream)));
 				declarer.declareStream(stream, fieldsObj);
 			}
 		}
 	}
 
+	protected  boolean isTickTuple(Tuple tuple) {
+		  return tuple.getSourceComponent().equals(Constants.SYSTEM_COMPONENT_ID)
+		    && tuple.getSourceStreamId().equals(Constants.SYSTEM_TICK_STREAM_ID);
+	}
+	
 }

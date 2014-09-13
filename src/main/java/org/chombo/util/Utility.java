@@ -68,6 +68,8 @@ public class Utility {
 	public static final Integer ZERO = 0;
 	public  static final Integer ONE = 1;
 	
+	public static final String DEF_FIELD_DELIM = ",";
+	
 	private static Pattern s3pattern = Pattern.compile("s3n:/+([^/]+)/+(.*)");
     /*
     static AmazonS3 s3 = null;
@@ -353,9 +355,9 @@ public class Utility {
     	return stBld.toString();
     }
 
-    /**
-     * @param recordItems
-     * @param remFieldOrdinal
+    /** creates tuple
+     * @param recordItems record  fields
+     * @param remFieldOrdinal record fields to be excluded
      * @return
      */
     public static void createTuple(String[] recordItems, int[] remFieldOrdinal, Tuple tuple) {
@@ -364,6 +366,18 @@ public class Utility {
     		if (!ArrayUtils.contains(remFieldOrdinal, i)) {
     			tuple.add(recordItems[i]);
     		}
+    	}
+    }    
+    
+    /** creates tuple
+     * @param record coma separated  fields
+     * @param tuple
+     */
+    public static void createTuple(String  record, Tuple tuple) {
+    	tuple.initialize();
+    	String[] items = record.split(",");
+    	for (String item : items) {
+    		tuple.add(item);
     	}
     }    
     
@@ -380,6 +394,14 @@ public class Utility {
     	}
     	return data;
     }
+
+    /**
+     * @param record
+     * @return
+     */
+    public static int[] intArrayFromString(String record) {
+    	return intArrayFromString(record, DEF_FIELD_DELIM);
+    }
     
     /**
      * @param record
@@ -394,7 +416,15 @@ public class Utility {
     	}
     	return data;
     }
-
+    
+    /**
+     * @param record
+     * @return
+     */
+    public static double[] doubleArrayFromString(String record) {
+    	return doubleArrayFromString(record, DEF_FIELD_DELIM);
+    }
+    
     /**
      * @param items
      * @param fields
@@ -566,5 +596,38 @@ public class Utility {
 	public static boolean isBlank(String data) {
 		return data == null || data.isEmpty();
 	}
-
+	
+	/**
+	 * @param record
+	 * @param fieldDelim
+	 * @param subFieldDelim
+	 * @return
+	 */
+	public static List<Pair<Integer, Integer>> getIntPairList(String record, String fieldDelim, String subFieldDelim) {
+		List<Pair<Integer, Integer>> intPairs = new ArrayList<Pair<Integer, Integer>>();
+		String[] items = record.split(fieldDelim);
+		for (String item : items) {
+			String[] subItems = item.split(subFieldDelim);
+			Pair<Integer, Integer> pair = new Pair<Integer, Integer>(Integer.parseInt(subItems[0]),  Integer.parseInt(subItems[1]));
+			intPairs.add(pair);
+		}
+		return intPairs;
+	}
+	
+	/**
+	 * @param record
+	 * @param fieldDelim
+	 * @param subFieldDelim
+	 * @return
+	 */
+	public static List<Pair<Integer, String>> getIntStringList(String record, String fieldDelim, String subFieldDelim) {
+		List<Pair<Integer, String>> intStringPairs = new ArrayList<Pair<Integer, String>>();
+		String[] items = record.split(fieldDelim);
+		for (String item : items) {
+			String[] subItems = item.split(subFieldDelim);
+			Pair<Integer, String> pair = new Pair<Integer, String>(Integer.parseInt(subItems[0]),  subItems[1]);
+			intStringPairs.add(pair);
+		}
+		return intStringPairs;
+	}
 }
