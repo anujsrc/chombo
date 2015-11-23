@@ -1,5 +1,5 @@
 /*
- * chombo: Hadoop Map Reduce utility
+ * chombo: Hadoop Map Reduce and Storm utility
  * Author: Pranab Ghosh
  * 
  * Licensed under the Apache License, Version 2.0 (the "License"); you
@@ -15,23 +15,40 @@
  * permissions and limitations under the License.
  */
 
-package org.chombo.mr;
+package org.chombo.storm;
 
-import java.util.List;
+import java.util.Map;
 
 /**
+ * Pub sub based on Redis queue
  * @author pranab
  *
  */
-public class HistogramSchema {
-	private List<HistogramField> fields;
-
-	public List<HistogramField> getFields() {
-		return fields;
-	}
-
-	public void setFields(List<HistogramField> fields) {
-		this.fields = fields;
+public class RedisPubSub extends PubSub{
+	private MessageQueue msgQueue;
+	
+	/**
+	 * @param conf
+	 * @param storageEntity
+	 * @param maxSubscriber
+	 */
+	public RedisPubSub(Map conf, String storageEntity, int maxSubscriber) {
+		msgQueue = MessageQueue.createMessageQueue(conf, storageEntity);
+		this.maxSubscriber = maxSubscriber;
 	}
 	
+	/**
+	 * @param msg
+	 */
+	public void publish(String msg) {
+		msgQueue.send(msg);
+	}
+	
+	/**
+	 * @return
+	 */
+	public String pull() {
+		return msgQueue.receive();
+	}
+
 }

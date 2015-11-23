@@ -17,8 +17,27 @@
 
 package org.chombo.util;
 
-public interface AttributeTransformer {
-
-	public String tranform(String value);
+/**
+ * Incremental average
+ * @author pranab
+ *
+ */
+public class IncrementalSimpleStat implements AverageValue {
+	private double avgValue;
+	private long count;
+	
+	public void add(double value) {
+		++count;
+		avgValue += (value - avgValue) / count;
+	}
+	
+	public double getAvgValue() {
+		return avgValue;
+	}
+	
+	@Override
+	public void setAvgValue(double avgValue) {
+		this.avgValue = avgValue;
+	}
 	
 }

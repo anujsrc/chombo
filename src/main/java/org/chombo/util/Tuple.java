@@ -133,6 +133,20 @@ public class Tuple  implements WritableComparable<Tuple>  {
 	}
 	
 	/**
+	 * @param other
+	 */
+	public void add(Tuple other) {
+		fields.addAll(other.fields);
+	}
+	
+	 /**
+	 * @param list
+	 */
+	public  <T> void add(List<T> list) {
+		 fields.addAll(list);
+	 }
+	 
+	/**
 	 * adds string serilized elements
 	 * @param type
 	 * @param field
@@ -169,6 +183,41 @@ public class Tuple  implements WritableComparable<Tuple>  {
 		}
 	}
 
+	/**
+	 * @param items
+	 * @param start
+	 * @param end
+	 */
+	public <T> void addFromArray(T[] items, int start, int end) {
+		for (int index = start;   index < end; ++index) {
+			add(items[index]);
+		}
+	}
+	
+	/**
+	 * Adds multiple contiguous elements of an array
+	 * @param items
+	 * @param indexes
+	 */
+	public <T> void addFromArray(T[] items, int[] indexes) {
+		for (int index  :  indexes) {
+			add(items[index]);
+		}
+	}
+	
+	/**
+	 * Adds multiple elements of an array
+	 * @param items
+	 * @param indexes
+	 */
+	public  <T> void addArrayElements(T[] items, int[] indexes) {
+    	if (null != indexes) {
+    		for (int i  :  indexes) {
+    			add(items[i]);
+    		}
+    	}
+	}
+	
 	/**
 	 * sets specific element
 	 * @param index
@@ -485,8 +534,18 @@ public class Tuple  implements WritableComparable<Tuple>  {
 	 * @return
 	 */
 	public String toString(int start) {
+		return toString(start, fields.size());
+	}
+	
+	/**
+	 * to string starting at given index
+	 * @param start
+	 * @param end
+	 * @return
+	 */
+	public String toString(int start, int end) {
 		StringBuilder stBld = new  StringBuilder();
-		for(int i = start; i <  fields.size() ; ++i) {
+		for(int i = start; i <  end ; ++i) {
 			if (i == start){
 				stBld.append(fields.get(i).toString());
 			} else {
@@ -495,7 +554,7 @@ public class Tuple  implements WritableComparable<Tuple>  {
 		}		
 		return stBld.toString();
 	}
-	
+
 	/**
 	 * creates tuple based on partial list of source tuple
 	 * @param start
@@ -513,5 +572,39 @@ public class Tuple  implements WritableComparable<Tuple>  {
 		}
 		return subTuple;
 	}
+	
+	/**
+	 * creates tuple based on partial list of source tuple
+	 * @param start
+	 * @param end
+	 * @return
+	 */
+	public String[]  subTupleAsArray(int start, int end) {
+		if (end < start) {
+			throw new IllegalArgumentException("end index is smaller that start index");
+		}
+		
+		String[] subTuple = new String[end - start];
+		for (int i = start; i < end; ++i) {
+			subTuple[i - start] = get(i).toString();
+		}
+		return subTuple;
+	}
+	
+	/**
+	 * @param start
+	 * @return
+	 */
+	public String[]  subTupleAsArray(int start) {
+		return subTupleAsArray(start, fields.size());
+	}
+	
+	/**
+	 * @return
+	 */
+	public String[] getTupleAsArray() {
+		return subTupleAsArray(0, fields.size());
+	}
+	
 	
 }

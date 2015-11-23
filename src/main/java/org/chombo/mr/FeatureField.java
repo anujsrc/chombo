@@ -17,14 +17,18 @@
 
 package org.chombo.mr;
 
+import org.chombo.util.RichAttribute;
+
 /**
  * Field for feature attribute and class attribute
  * @author pranab
  *
  */
-public class FeatureField extends HistogramField implements  Comparable<FeatureField>{
+public class FeatureField extends RichAttribute implements  Comparable<FeatureField>{
 	protected boolean  feature;
 	protected int maxSplit;
+	protected double  splitScanInterval;
+	protected int maxCatAttrSplitGroups;
 
 	public boolean isFeature() {
 		return feature;
@@ -40,6 +44,23 @@ public class FeatureField extends HistogramField implements  Comparable<FeatureF
 
 	public void setMaxSplit(int maxSplit) {
 		this.maxSplit = maxSplit;
+	}
+
+
+	public double getSplitScanInterval() {
+		return splitScanInterval;
+	}
+
+	public void setSplitScanInterval(double splitScanInterval) {
+		this.splitScanInterval = splitScanInterval;
+	}
+
+	public int getMaxCatAttrSplitGroups() {
+		return maxCatAttrSplitGroups;
+	}
+
+	public void setMaxCatAttrSplitGroups(int maxCatAttrSplitGroups) {
+		this.maxCatAttrSplitGroups = maxCatAttrSplitGroups;
 	}
 
 	@Override
