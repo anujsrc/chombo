@@ -25,7 +25,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.PrintWriter;
 import java.io.StringReader;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -45,6 +48,7 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.mapreduce.Job;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
@@ -81,22 +85,13 @@ public class Utility {
 	private static Pattern s3pattern = Pattern.compile("s3n:/+([^/]+)/+(.*)");
 	public static String configDelim = ",";
 	public  static String configSubFieldDelim = ":";
-
-    /*
-    static AmazonS3 s3 = null;
- 	static {
-		try {	
-			s3 = new AmazonS3Client(new PropertiesCredentials(Utility.class.getResourceAsStream("AwsCredentials.properties")));
-		}
-		catch (Exception e) {
-			e.printStackTrace();
-		}
-	}
-	*/
-    
-    
 	
+	public static long MILISEC_PER_HOUR = 60L * 1000 * 1000;
+	public static long MILISEC_PER_HALF_DAY = 12 * MILISEC_PER_HOUR;
+	public static long MILISEC_PER_DAY = 24 * MILISEC_PER_HOUR;
+
     /**
+     * sets configuration
      * @param conf
      * @throws Exception
      */
@@ -115,6 +110,7 @@ public class Utility {
     }
 
     /**
+     * sets configuration and defaults to project name based config file
      * @param conf
      * @param project
      * @throws Exception
@@ -221,6 +217,22 @@ public class Utility {
 	}	
 	
     /**
+     * sets configuration and defaults to project name based config file
+     * @param conf
+     * @param project
+     * @param filterByGroup
+     * @throws Exception
+     */
+    public static void setConfiguration(Configuration conf, String project, boolean filterByGroup) throws Exception{
+    	if (filterByGroup) {
+    		ConfigurationLoader configLoader = new ConfigurationLoader(conf, project);
+    		configLoader.set();
+    	} else {
+    		setConfiguration(conf, project);
+    	}
+    }
+    
+    /**
      * @param vec
      * @param val
      */
@@ -293,6 +305,23 @@ public class Utility {
      * @return
      * @throws IOException
      */
+    public static InputStream getFileStream(String filePath) throws IOException {
+    	Configuration conf = new Configuration();
+        FSDataInputStream fs = null;
+        if (null != filePath) {
+        	FileSystem dfs = FileSystem.get(conf);
+        	Path src = new Path(filePath);
+        	fs = dfs.open(src);
+        }
+        return fs;
+    }
+ 
+    /**
+     * @param conf
+     * @param pathConfig
+     * @return
+     * @throws IOException
+     */
     public static OutputStream getCreateFileOutputStream(Configuration conf, String pathConfig) throws IOException {
         String filePath = conf.get(pathConfig);
         FSDataOutputStream fs = null;
@@ -302,6 +331,20 @@ public class Utility {
         	fs = dfs.create(src, true);
         }
         return fs;
+    }
+
+    /**
+     * @param conf
+     * @param pathConfig
+     * @param data
+     * @throws IOException
+     */
+    public static void writeToFile(Configuration conf, String pathConfig, String data) throws IOException {
+        OutputStream os = Utility.getCreateFileOutputStream(conf, pathConfig);
+        PrintWriter writer = new PrintWriter(os);
+		writer.write(data);
+		writer.close();
+		os.close();
     }
 
     /**
@@ -321,6 +364,20 @@ public class Utility {
         return fs;
     }
 
+    /**
+     * @param conf
+     * @param pathConfig
+     * @param data
+     * @throws IOException
+     */
+    public static void appendToFile(Configuration conf, String pathConfig, String data) throws IOException {
+        OutputStream os = Utility.getAppendFileOutputStream(conf, pathConfig);
+        PrintWriter writer = new PrintWriter(os);
+		writer.write(data);
+		writer.close();
+		os.close();
+    }
+    
     /**
      * @param conf
      * @param filePathParam
@@ -353,6 +410,24 @@ public class Utility {
     public static List<String> getFileLines(Configuration conf, String filePathParam) throws IOException {
     	List<String> lines = new ArrayList<String>();
     	InputStream fs = getFileStream(conf, filePathParam);
+    	if (null != fs) {
+    		BufferedReader reader = new BufferedReader(new InputStreamReader(fs));
+    		String line = null; 
+    		while((line = reader.readLine()) != null) {
+    			lines.add(line);
+    		}
+    	}
+    	return lines;
+    }
+
+    /**
+     * @param filePath
+     * @return
+     * @throws IOException
+     */
+    public static List<String> getFileLines(String filePath) throws IOException {
+    	List<String> lines = new ArrayList<String>();
+    	InputStream fs = getFileStream(filePath);
     	if (null != fs) {
     		BufferedReader reader = new BufferedReader(new InputStreamReader(fs));
     		String line = null; 
@@ -481,12 +556,40 @@ public class Utility {
      * @param tuple
      */
     public static void createTuple(String  record, Tuple tuple) {
-    	tuple.initialize();
     	String[] items = record.split(",");
-    	for (String item : items) {
-    		tuple.add(item);
-    	}
+    	createStringTuple(items, 0, items.length, tuple);
     }    
+ 
+	/**
+	 * @param record
+	 * @param offset
+	 * @param tuple
+	 */
+	public static void createStringTupleFromBegining(String[] record, int offset, Tuple tuple) {
+		createStringTuple(record, 0, offset, tuple);
+	}    
+
+	/**
+	 * @param record
+	 * @param offset
+	 * @param tuple
+	 */
+	public static void createStringTupleFromEnd(String[] record, int offset, Tuple tuple) {
+		createStringTuple(record, offset, record.length, tuple);
+	}    
+
+	/**
+	 * @param record
+	 * @param beg
+	 * @param end
+	 * @param tuple
+	 */
+	public static void createStringTuple(String[] record, int beg, int end, Tuple tuple) {
+		tuple.initialize();
+		for (int i = beg; i < end; ++i) {
+			tuple.add(record[i]);
+		}
+	}
     
     /**
      * @param record
@@ -656,12 +759,18 @@ public class Utility {
      * @return
      */
     public static <T> String join(List<T> list, String delim) {
-    	StringBuilder stBld = new StringBuilder();
-    	for (T obj : list) {
-    		stBld.append(obj).append(delim);
+    	String joined = null;
+    	if (list.size() == 1) {
+    		joined = list.get(0).toString();
+    	} else {
+	    	StringBuilder stBld = new StringBuilder();
+	    	for (T obj : list) {
+	    		stBld.append(obj).append(delim);
+	    	}
+	    	
+	    	joined =  stBld.substring(0, stBld.length() -1);
     	}
-    	
-    	return stBld.substring(0, stBld.length() -1);
+    	return joined;
     }
   
     /**
@@ -717,6 +826,27 @@ public class Utility {
     	return stBld.substring(0, stBld.length() -1);
     }
 
+    /**
+     * @param arr
+     * @param obj
+     * @return
+     */
+    public static <T> int getIndex(T[] arr, T obj) {
+    	int i = 0;
+    	boolean found = false;
+    	for (T thisObj : arr) {
+    		if (thisObj.equals(obj)) {
+    			found = true;
+    			break;
+    		}
+    		++i;
+    	}
+    	if (!found) {
+    		throw new IllegalArgumentException("object not found in array");
+    	}
+    	return i;
+    }
+    
     /**
      * @param arr
      * @return
@@ -899,8 +1029,8 @@ public class Utility {
 	 */
 	public static int  assertIntConfigParam(Configuration config, String param, String msg) {
 		int  value = Integer.MIN_VALUE;
-	   assertStringConfigParam( config, param,  msg); 
-	   value = config.getInt(param,  Integer.MIN_VALUE);
+		assertStringConfigParam( config, param,  msg); 
+		value = config.getInt(param,  Integer.MIN_VALUE);
 		return value;
 	}
 
@@ -912,8 +1042,8 @@ public class Utility {
 	 */
 	public static double  assertDoubleConfigParam(Configuration config, String param, String msg) {
 		double  value = Double.MIN_VALUE;
-	   String stParamValue = assertStringConfigParam( config, param,  msg); 
-	   value = Double.parseDouble(stParamValue);
+		String stParamValue = assertStringConfigParam(config, param,  msg); 
+		value = Double.parseDouble(stParamValue);
 		return value;
 	}
 
@@ -925,7 +1055,7 @@ public class Utility {
 	 */
 	public static boolean  assertBooleanConfigParam(Configuration config, String param, String msg) {
 		boolean value = false;
-	   	assertStringConfigParam( config, param,  msg); 
+	   	assertStringConfigParam(config, param,  msg); 
 		value = config.getBoolean(param, false);
 		return value;
 	}
@@ -986,7 +1116,7 @@ public class Utility {
 	 * @param msg
 	 * @return
 	 */
-	public static Map<String, Integer> assertIntStringIntegerMapConfigParam(Configuration config, String param, String delimRegex, 
+	public static Map<String, Integer> assertStringIntegerMapConfigParam(Configuration config, String param, String delimRegex, 
 			String subFieldDelim, String msg) {
 	   	String stParamValue =  assertStringConfigParam( config, param,  msg); 
 		String[] items = stParamValue.split(delimRegex);
@@ -1008,7 +1138,7 @@ public class Utility {
 	 */
 	public static Map<Integer, Integer> assertIntIntegerIntegerMapConfigParam(Configuration config, String param, String delimRegex, 
 			String subFieldDelim, String msg) {
-		return assertIntIntegerIntegerMapConfigParam(config, param, delimRegex, subFieldDelim, msg);
+		return assertIntegerIntegerMapConfigParam(config, param, delimRegex, subFieldDelim, msg, true);
 	}
 
 	/**
@@ -1020,7 +1150,7 @@ public class Utility {
 	 * @param rangeInKey
 	 * @return
 	 */
-	public static Map<Integer, Integer> assertIntIntegerIntegerMapConfigParam(Configuration config, String param, String delimRegex, 
+	public static Map<Integer, Integer> assertIntegerIntegerMapConfigParam(Configuration config, String param, String delimRegex, 
 			String subFieldDelim, String msg, boolean rangeInKey) {
 	   	String stParamValue =  assertStringConfigParam( config, param,  msg); 
 		String[] items = stParamValue.split(delimRegex);
@@ -1036,6 +1166,7 @@ public class Utility {
 					int rangeEnd = Integer.parseInt(rangeLimits[1]);
 					int val = Integer.parseInt(parts[1]);
 					for (int r = rangeBeg; r <= rangeEnd; ++r) {
+						//key:hour value:hour group
 						data.put(r,  val);
 					}
 				}
@@ -1058,7 +1189,7 @@ public class Utility {
 	 * @param msg
 	 * @return
 	 */
-	public static Map<Integer, Double> assertIntIntegerDoubleMapConfigParam(Configuration config, String param, String delimRegex, 
+	public static Map<Integer, Double> assertIntegerDoubleMapConfigParam(Configuration config, String param, String delimRegex, 
 			String subFieldDelim, String msg) {
 	   	String stParamValue =  assertStringConfigParam( config, param,  msg); 
 		String[] items = stParamValue.split(delimRegex);
@@ -1066,6 +1197,26 @@ public class Utility {
 		for (String item :  items) {
 			String[] parts  = item.split(subFieldDelim);
 			data.put(Integer.parseInt(parts[0]), Double.parseDouble(parts[1]));
+		}
+    	return data;
+	}
+
+	/**
+	 * @param config
+	 * @param param
+	 * @param delimRegex
+	 * @param subFieldDelim
+	 * @param msg
+	 * @return
+	 */
+	public static Map<Integer, String> assertIntegerStringMapConfigParam(Configuration config, String param, String delimRegex, 
+			String subFieldDelim, String msg) {
+	   	String stParamValue =  assertStringConfigParam(config, param,  msg); 
+		String[] items = stParamValue.split(delimRegex);
+		Map<Integer, String> data = new HashMap<Integer, String>() ;
+		for (String item :  items) {
+			String[] parts  = item.split(subFieldDelim);
+			data.put(Integer.parseInt(parts[0]), parts[1]);
 		}
     	return data;
 	}
@@ -1154,6 +1305,47 @@ public class Utility {
 	
 	/**
 	 * @param record
+	 * @param fieldDelim
+	 * @param numFields
+	 * @param failOnInvalid
+	 * @return
+	 */
+	public static String[] splitFields(String record, String fieldDelim, int numFields, boolean failOnInvalid) {
+		String[] items = record.split(fieldDelim, -1);
+		if (items.length != numFields) {
+			if (items.length < numFields) {
+				//check if trailing blank fields
+				int delimCount = StringUtils.countMatches(record, fieldDelim);
+				if (delimCount == numFields - 1) {
+					//trailing blank fields
+					String[] extItems = new String[numFields];
+					for (int i = 0; i < numFields; ++i) {
+						if (i < items.length) {
+							extItems[i] = items[i];
+						} else {
+							//fill trailing fields with blanks
+							extItems[i] = "";
+						}
+					}
+					items = extItems;
+				} else {
+					//got too few fields
+					items = null;
+				}
+			} else {
+				//got too many fields
+				items = null;
+			}
+			
+			if (null == items && failOnInvalid) {
+				throw new IllegalArgumentException("invalid field count expected " + numFields + " found " + items.length);
+			}
+		}
+		return items;
+	}
+	
+	/**
+	 * @param record
 	 * @param fieldDelem
 	 * @param numFields
 	 * @param throwEx
@@ -1168,6 +1360,21 @@ public class Utility {
 			fields = null;
 		}
 		return fields;
+	}
+	
+	/**
+	 * @param items
+	 * @return
+	 */
+	public static boolean anyEmptyField(String[] items) {
+		boolean isEmpty = false;
+		for (String item : items) {
+			if (item.isEmpty()) {
+				isEmpty = true;
+				break;
+			}
+		}
+		return isEmpty;
 	}
 	
 	/**
@@ -1186,6 +1393,21 @@ public class Utility {
 		return config;
 	}
 	
+	/**
+	 * @param filePath
+	 * @return
+	 * @throws IOException
+	 */
+	public static Config getHoconConfig(String filePath) throws IOException {
+		Config config =  null;
+		if (null  !=  filePath) {
+			InputStream is = getFileStream(filePath);
+			BufferedReader bufRead =new BufferedReader(new InputStreamReader(is));
+			config =  ConfigFactory.parseReader(bufRead);
+		}
+		return config;
+	}
+
 	/**
 	 * @param conf
 	 * @param pathParam
@@ -1248,6 +1470,18 @@ public class Utility {
 	}
 	
 	/**
+	 * @param filePath
+	 * @return
+	 * @throws IOException
+	 */
+	public static ProcessorAttributeSchema getProcessingSchema( String filePath) throws IOException {
+		InputStream is = Utility.getFileStream(filePath);
+		ObjectMapper mapper = new ObjectMapper();
+		ProcessorAttributeSchema processingSchema = mapper.readValue(is, ProcessorAttributeSchema.class);
+		return processingSchema;
+	}
+
+	/**
 	 * @param config
 	 * @param params
 	 * @return
@@ -1294,6 +1528,60 @@ public class Utility {
     }
  
     /**
+     * @param list
+     * @param subList
+     * @return
+     */
+    public static <T> List<T> listDifference(List<T> list, List<T> subList) {
+    	List<T> diff = new ArrayList<T>();
+    	for (T item : list) {
+    		if (!subList.contains(item)) {
+    			diff.add(item);
+    		}
+    	}
+    	return diff;
+    }
+
+    /**
+     * @param list
+     * @param maxSubListSize
+     * @return
+     */
+    public static <T> List<List<T>>  generateSublists(List<T> list,   int maxSubListSize) {
+    	 List<List<T>> subLists = new ArrayList<List<T>>();
+    	 
+    	 //for each  item  in list generate sublists up to max length
+    	 for (int i = 0; i < list.size();  ++i) {
+    		 List<T> subList = new ArrayList<T>();
+    		 subList.add(list.get(i));
+    		 subLists.add(subList);
+    		 generateSublists(list, subList, i, subLists, maxSubListSize);
+    	 }
+    	 return subLists;
+    }   
+    
+    
+    /**
+     * generates sub lists of varying size from a list
+     * @param list
+     * @param subList
+     * @return
+     */
+    public static <T> void  generateSublists(List<T> list, List<T> subList, int lastIndex, 
+    	List<List<T>> subLists, int maxSubListSize) {
+    	for (int i = lastIndex + 1; i < list.size(); ++i) {
+    			List<T> biggerSubList = new ArrayList<T>();
+    			biggerSubList.addAll(subList);
+    			biggerSubList.add(list.get(i));
+    			subLists.add(biggerSubList);
+    			if (biggerSubList.size() < maxSubListSize) {
+    				//recurse
+    				generateSublists(list, biggerSubList, i, subLists, maxSubListSize);
+    			}
+    	}    	
+    }
+    
+    /**
      * Takes user specified attributes or builds  list of attributes of right type from schema 
      * @param attrListParam
      * @param configDelim
@@ -1304,10 +1592,13 @@ public class Utility {
      */
     public static int[] getAttributes(String attrListParam, String configDelim, GenericAttributeSchema schema, 
     		Configuration config, String... includeTypes) {        	
-    	int[] attributes =  assertIntArrayConfigParam(config, attrListParam, configDelim, "missing attribute list");
+    	int[] attributes = Utility.intArrayFromString(config.get(attrListParam), configDelim);
     	List<Attribute> attrsMetaData = schema != null ? schema.getQuantAttributes(includeTypes) : null;
     	if (null == attributes) {
     		//use schema and pick all attributes of right type
+    		if (null == attrsMetaData) {
+    			throw new IllegalStateException("Neither attribute ordinal list ot schema available");
+    		}
     		attributes = new int[attrsMetaData.size()];
     		for (int i = 0; i < attrsMetaData.size(); ++i) {
     			attributes[i] = attrsMetaData.get(i).getOrdinal();
@@ -1353,7 +1644,8 @@ public class Utility {
     		}
     	}
     }
-    
+
+
     /**
      * @param val
      * @param prec
@@ -1364,4 +1656,145 @@ public class Utility {
     	return String.format(formatter, val);
     }
     
+    /**
+     * @param val
+     * @param size
+     * @return
+     */
+    public static String formatInt(int val, int size) {
+    	String formatter = "%0" + size + "d";
+    	return String.format(formatter, val);
+    }
+
+    /**
+     * @param val
+     * @param size
+     * @return
+     */
+    public static String formatLong(long val, int size) {
+    	String formatter = "%0" + size + "d";
+    	return String.format(formatter, val);
+    }
+
+    /**
+     * Analyzes text and return analyzed text
+     * @param text
+     * @return
+     * @throws IOException
+     */
+    public static  String analyze(String text, Analyzer analyzer) throws IOException {
+        TokenStream stream = analyzer.tokenStream("contents", new StringReader(text));
+        StringBuilder stBld = new StringBuilder();
+
+        stream.reset();
+        CharTermAttribute termAttribute = (CharTermAttribute)stream.getAttribute(CharTermAttribute.class);
+        while (stream.incrementToken()) {
+    		String token = termAttribute.toString();
+    		stBld.append(token).append(" ");
+    	} 
+    	stream.end();
+    	stream.close();
+    	return stBld.toString();
+    }
+
+    /**
+     * @param dateTimeStamp
+     * @param dateFormat
+     * @return
+     * @throws ParseException
+     */
+    public static long getEpochTime(String dateTimeStamp, SimpleDateFormat dateFormat) throws ParseException {
+    	return getEpochTime(dateTimeStamp, false, dateFormat,0);
+    }
+
+    /**
+     * @param dateTimeStamp
+     * @param isEpochTime
+     * @param dateFormat
+     * @return
+     * @throws ParseException
+     */
+    public static long getEpochTime(String dateTimeStamp, boolean isEpochTime, SimpleDateFormat dateFormat) throws ParseException {
+    	return getEpochTime(dateTimeStamp, isEpochTime, dateFormat,0);
+    }
+    
+    /**
+     * @param dateTimeStamp
+     * @param isEpochTime
+     * @param dateFormat
+     * @param timeZoneShiftHour
+     * @return
+     * @throws ParseException
+     */
+    public static long getEpochTime(String dateTimeStamp, boolean isEpochTime, SimpleDateFormat dateFormat, 
+    	int timeZoneShiftHour) throws ParseException {
+    	long epochTime = 0;
+    	if (isEpochTime) {
+    		epochTime = Long.parseLong(dateTimeStamp);
+    	} else {
+    		epochTime = dateFormat.parse(dateTimeStamp).getTime();
+        	epochTime += timeZoneShiftHour * MILISEC_PER_HOUR;
+    	}
+    	
+    	return epochTime;
+    }
+    
+    /**
+     * @param config
+     * @param fieldDelimParam
+     * @param defFieldDelimParam
+     * @param defFieldDelim
+     * @return
+     */
+    public static String getFieldDelimiter(Configuration config, String fieldDelimParam, 
+    		String defFieldDelimParam, String defFieldDelim) {
+    	String fieldDelim = config.get(fieldDelimParam);
+    	if (null == fieldDelim) {
+    		//get default
+    		fieldDelim = config.get(defFieldDelimParam, defFieldDelim);
+    	}
+    	return fieldDelim;
+    }
+    
+    /**
+     * @param epochTime
+     * @param timeUnit
+     * @return
+     */
+    public static long convertTimeUnit(long epochTime, String timeUnit) {
+    	long modTime = epochTime;
+		if (timeUnit.equals("hour")) {
+			modTime /= MILISEC_PER_HOUR;
+		} else if (timeUnit.equals("day")) {
+			modTime /= MILISEC_PER_DAY;
+		} else {
+			throw new IllegalArgumentException("invalid time unit");
+		}
+    	return modTime;
+    }
+    
+    /**
+     * @param thisVector
+     * @param thatVector
+     * @return
+     */
+    public static double dotProduct(double[] thisVector, double[] thatVector) {
+    	double product = 0;
+    	if (thisVector.length != thatVector.length) {
+    		throw new IllegalArgumentException("mismatched size for vector dot product");
+    	}
+    	
+    	for (int i = 0; i < thisVector.length; ++i) {
+    		product += thisVector[i] * thatVector[i];
+    	}
+    	return product;
+    }
+   
+    /**
+     * @param job
+     */
+    public static void setTuplePairSecondarySorting(Job job) {
+        job.setGroupingComparatorClass(SecondarySort.TuplePairGroupComprator.class);
+        job.setPartitionerClass(SecondarySort.TuplePairPartitioner.class);
+    }
 }

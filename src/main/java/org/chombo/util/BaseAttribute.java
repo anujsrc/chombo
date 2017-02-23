@@ -17,11 +17,14 @@
 
 package org.chombo.util;
 
+import java.io.Serializable;
+
 /**
  * @author pranab
  *
  */
-public class BaseAttribute {
+public class BaseAttribute  implements Serializable {
+	private static final long serialVersionUID = 7639336747752713872L;
 	protected String name;
 	protected int ordinal = -1;
 	protected String dataType;
@@ -32,6 +35,8 @@ public class BaseAttribute {
 	public static final String DATA_TYPE_DOUBLE = "double";
 	public static final String DATA_TYPE_TEXT = "text";
 	public static final String DATA_TYPE_DATE = "date";
+	public static final String DATA_TYPE_STRING_COMPOSITE = "stringComp";
+	public static final String DATA_TYPE_GEO_LOCATION = "geoLocation";
 	
 	public String getName() {
 		return name;
@@ -79,4 +84,7 @@ public class BaseAttribute {
 		return dataType.equals(DATA_TYPE_TEXT );
 	}
 
+	public boolean isGeoLocation() {
+		return dataType.equals(DATA_TYPE_GEO_LOCATION );
+	}
 }

@@ -8,9 +8,12 @@ fresh batch of store order data. By statistics, we mean average and std deviatio
 
 Dependent script
 ================
-Checkout the project visitante. Take the script util.py from the project and placeit
+Checkout the project visitante. Take the script util.py and sampler.py from the project and placeit
 in ../lib directory with respect the directory containing store_order.py
 
+Deployment
+==========
+Please refer to building_uber_jar.txt
 
 1. Create products
 ==================
@@ -29,6 +32,9 @@ product_data_file contains the product data, the first field being the product I
 store_data_file contains the store data, the first field being the store ID
 average_num_products is the average number of products ordered by a store
 order_data_file is the outfile with order data
+
+order_data_file should be named such that it starts with string defined by the config
+parameter rug.incremental.file.prefix
 
 For product_data_file and store_data_file it's only the first field that matters.
 

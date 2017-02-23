@@ -17,6 +17,8 @@
 
 package org.chombo.transformer;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Constructor;
 import java.util.HashMap;
 import java.util.List;
@@ -48,7 +50,14 @@ public class TransformerFactory {
 	public static final String EPOCH_TIME_GENERATOR = "epochTimeGen";
 	public static final String DATE_GENERATOR = "dateGen";
 	public static final String DATE_FORMAT_TRANSFORMER = "dateFormatTrans";
+	public static final String DATE_COMPONENT_TRANSFORMER = "dateComponentTrans";
+	public static final String ELAPSED_TIME_TRANSFORMER = "elapsedTimeTrans";
+	public static final String CONTEXTUAL_ELAPSED_TIME_TRANSFORMER = "contextualElapsedTimeTrans";
+	public static final String TIME_CYCLE_SHIFT_TRANSFORMER = "timeCycleShiftTrans";
+	public static final String CONTEXTUAL_TIME_CYCLE_SHIFT_TRANSFORMER = "contextualTimeCycleShiftTrans";
+	public static final String TIME_CYCLE_TRANSFORMER = "timeCycleTrans";
 	public static final String NUM_DATA_DISCRETIZER = "discretizerTrans";
+	public static final String NUM_BINARY_TRANSFORMER  = "binaryTrans";
 	public static final String INT_ADD_TRANSFORMER = "intAddTrans";
 	public static final String INT_SUBTRACT_TRANSFORMER = "intSubtractTrans";
 	public static final String INT_MULTIPLY_TRANSFORMER = "intMultiplyTrans";
@@ -61,6 +70,12 @@ public class TransformerFactory {
 	public static final String GROUP_TRANFORMER = "groupTrans";
 	public static final String FORCED_REPLACE_TRANSFORMER  = "forcedReplaceTrans";
 	public static final String STRING_CUSTOM_TRANSFORMER  = "stringCustomTrans";
+	public static final String STRING_DELETE_TRANSFORMER  = "stringDeleteTrans";
+	public static final String STRING_CONCATENATION_TRANSFORMER  = "stringConcatenationTrans";
+	public static final String STRING_SPLIT_TRANSFORMER  = "stringSplitTrans";
+	public static final String STRING_FIELD_MERGE_TRANSFORMER  = "stringFieldMergeTrans";
+	public static final String STRING_WITHIN_FIELD_DELIM_TRANSFORMER  = "stringWithinFieldDelimTrans";
+	public static final String STRING_BINARY_TRANSFORMER  = "stringBinaryTrans";
 	
 	private static Map<String,String> custTransformerClasses = new HashMap<String,String>();
 	private static Map<String,AttributeTransformer> custTransformers = new HashMap<String,AttributeTransformer>();
@@ -135,8 +150,22 @@ public class TransformerFactory {
 			transformer = new DateTransformer.DateGenerator(prAttr, getTransformerConfig(config , transformerTag, prAttr));
 		} else if (transformerTag.equals(DATE_FORMAT_TRANSFORMER)) {
 			transformer = new DateTransformer.DateFormatTransformer(prAttr, getTransformerConfig(config , transformerTag, prAttr));
+		} else if (transformerTag.equals(DATE_COMPONENT_TRANSFORMER)) {
+			transformer = new DateTransformer.DateComponentTransformer(prAttr, getTransformerConfig(config , transformerTag, prAttr));
+		} else if (transformerTag.equals(ELAPSED_TIME_TRANSFORMER)) {
+			transformer = new DateTransformer.ElapsedTimeTransformer(prAttr, getTransformerConfig(config , transformerTag, prAttr));
+		} else if (transformerTag.equals(CONTEXTUAL_ELAPSED_TIME_TRANSFORMER)) {
+			transformer = new DateTransformer.ContextualElapsedTimeTransformer(prAttr, getTransformerConfig(config , transformerTag, prAttr));
+		} else if (transformerTag.equals(TIME_CYCLE_SHIFT_TRANSFORMER)) {
+			transformer = new DateTransformer.TimeCyclicShiftTransformer(prAttr, getTransformerConfig(config , transformerTag, prAttr));
+		} else if (transformerTag.equals(CONTEXTUAL_TIME_CYCLE_SHIFT_TRANSFORMER)) {
+			transformer = new DateTransformer.ContextualTimeCyclicShiftTransformer(prAttr, getTransformerConfig(config , transformerTag, prAttr));
+		} else if (transformerTag.equals(TIME_CYCLE_TRANSFORMER)) {
+			transformer = new DateTransformer.TimeCycleTransformer(prAttr, getTransformerConfig(config , transformerTag, prAttr));
 		} else if (transformerTag.equals(NUM_DATA_DISCRETIZER)) {
 			transformer = new NumericTransformer.Discretizer(prAttr, getTransformerConfig(config , transformerTag, prAttr));
+		} else if (transformerTag.equals(NUM_BINARY_TRANSFORMER)) {
+			transformer = new NumericTransformer.BinaryCreator(prAttr, getTransformerConfig(config , transformerTag, prAttr));
 		} else if (transformerTag.equals(INT_ADD_TRANSFORMER) || transformerTag.equals(DOUBLE_ADD_TRANSFORMER)) {
 			transformer = new NumericTransformer.Adder(prAttr, getTransformerConfig(config , transformerTag, prAttr));
 		} else if (transformerTag.equals(INT_SUBTRACT_TRANSFORMER) || transformerTag.equals(DOUBLE_SUBTRACT_TRANSFORMER)) {
@@ -153,6 +182,18 @@ public class TransformerFactory {
 			transformer = new StringTransformer.ForcedReplaceTransformer(prAttr, getTransformerConfig(config , transformerTag, prAttr));
 		} else if (transformerTag.equals(STRING_CUSTOM_TRANSFORMER)) {
 			transformer = new StringTransformer.StringCustomTransformer(prAttr, getTransformerConfig(config , transformerTag, prAttr));
+		} else if (transformerTag.equals(STRING_DELETE_TRANSFORMER)) {
+			transformer = new StringTransformer.DeleteTransformer(prAttr, getTransformerConfig(config , transformerTag, prAttr));
+		} else if (transformerTag.equals(STRING_CONCATENATION_TRANSFORMER)) {
+			transformer = new StringTransformer.ConcatenatorTransformer(prAttr, getTransformerConfig(config , transformerTag, prAttr));
+		} else if (transformerTag.equals(STRING_SPLIT_TRANSFORMER)) {
+			transformer = new StringTransformer.SplitterTransformer(prAttr, getTransformerConfig(config , transformerTag, prAttr));
+		} else if (transformerTag.equals(STRING_FIELD_MERGE_TRANSFORMER)) {
+			transformer = new StringTransformer.FieldMergeTransformer(prAttr, getTransformerConfig(config , transformerTag, prAttr));
+		} else if (transformerTag.equals(STRING_WITHIN_FIELD_DELIM_TRANSFORMER)) {
+			transformer = new StringTransformer.WithinFieldDelimiterTransformer(prAttr, getTransformerConfig(config , transformerTag, prAttr));
+		} else if (transformerTag.equals(STRING_BINARY_TRANSFORMER)) {
+			transformer = new StringTransformer.BinaryValueTransformer(prAttr, getTransformerConfig(config , transformerTag, prAttr));
 		} else {
 			//custom transformer with configured transformer class names
 			transformer = createCustomTransformer(transformerTag, prAttr,  config);
@@ -172,6 +213,28 @@ public class TransformerFactory {
 		
 		return transformer;
 	}
+	
+	/**
+	 * @param transformerTag
+	 * @param prAttr
+	 * @param config
+	 * @param inStrm
+	 * @return
+	 * @throws IOException 
+	 */
+	public static AttributeTransformer createTransformer(String transformerTag,  ProcessorAttribute prAttr, 
+			Config config, InputStream inStrm) throws IOException {
+		AttributeTransformer transformer = null;
+		if (transformerTag.equals(KEY_VALUE_TRANSFORMER)) {
+			transformer = new StringTransformer.KeyValueTransformer(prAttr, 
+					getTransformerConfig(config , transformerTag, prAttr), inStrm);
+		} else {
+			throw new IllegalArgumentException("invalid transformer tag: " + transformerTag +  " ordinal:" + 
+					prAttr.getOrdinal() + " data type:" + prAttr.getDataType());
+		}
+		
+		return transformer;
+	}	
 	
     /**
      * @param tranformerTag

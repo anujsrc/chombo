@@ -25,15 +25,31 @@ package org.chombo.util;
 public class IntAttributePredicate  extends AttributePredicate {
 	private int value;
 
-	public IntAttributePredicate(int attribute, String operator, int value) {
+	public IntAttributePredicate(int attribute, String operator, String value) {
 		super(attribute, operator);
-		this.value = value;
+		this.value = Integer.parseInt(value);
+	}
+	
+	@Override
+	public void build(int attribute, String operator, String value) {
+		this.attribute = attribute;
+		this.operator = operator;
+		this.value = Integer.parseInt(value);
 	}
 
 	@Override
 	public boolean evaluate(String[] record) {
-		boolean status = false;
 		int operand = Integer.parseInt(record[attribute]);
+		return evaluateHelper(operand);
+	}
+	
+	@Override
+	public boolean evaluate(String field) {
+		return evaluateHelper(Integer.parseInt(field));
+	}
+	
+	private boolean evaluateHelper(int operand) {
+		boolean status = false;
 		if (operator.equals(GREATER_THAN)) {
 			status = operand > value;
 		} else if (operator.equals(LESS_THAN)) {

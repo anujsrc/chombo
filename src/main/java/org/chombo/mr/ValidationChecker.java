@@ -18,7 +18,6 @@
 package org.chombo.mr;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -37,22 +36,16 @@ import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
-import org.chombo.transformer.TransformerFactory;
-import org.chombo.util.Attribute;
-import org.chombo.util.GenericAttributeSchema;
 import org.chombo.util.MedianStatsManager;
 import org.chombo.util.NumericalAttrStatsManager;
 import org.chombo.util.ProcessorAttribute;
 import org.chombo.util.ProcessorAttributeSchema;
-import org.chombo.util.StatsParameters;
 import org.chombo.util.Utility;
 import org.chombo.validator.InvalidData;
 import org.chombo.validator.Validator;
 import org.chombo.validator.ValidatorFactory;
-import org.codehaus.jackson.map.ObjectMapper;
 
 import com.typesafe.config.Config;
-import com.typesafe.config.ConfigList;
 
 /**
  * Data validator. Multiple out of the box validators can be configured for each field. Custom validators
@@ -79,7 +72,7 @@ public class ValidationChecker extends Configured implements Tool {
         job.setNumReduceTasks(0);
         
         //create invalid data report file
-       OutputStream os = Utility.getCreateFileOutputStream(job.getConfiguration(), "invalid.data.file.path");
+       OutputStream os = Utility.getCreateFileOutputStream(job.getConfiguration(), "vac.invalid.data.file.path");
        os.close();
         
         int status =  job.waitForCompletion(true) ? 0 : 1;
@@ -117,20 +110,20 @@ public class ValidationChecker extends Configured implements Tool {
         	Configuration config = context.getConfiguration();
         	fieldDelimRegex = config.get("field.delim.regex", ",");
         	fieldDelimOut = config.get("field.delim", ",");
-        	filterInvalidRecords = config.getBoolean("filter.invalid.records", true);
-        	invalidDataFilePath = config.get("invalid.data.file.path");
+        	filterInvalidRecords = config.getBoolean("vac.filter.invalid.records", true);
+        	invalidDataFilePath = config.get("vac.invalid.data.file.path");
 
            	//record id
-        	idOrdinals = Utility.intArrayFromString(config.get("id.field.ordinals"), fieldDelimRegex);
+        	idOrdinals = Utility.intArrayFromString(config.get("vac.id.field.ordinals"), fieldDelimRegex);
  
         	//schema
-        	validationSchema = Utility.getProcessingSchema(config, "validation.schema.file.path");
+        	validationSchema = Utility.getProcessingSchema(config, "vac.validation.schema.file.path");
  
             //validator config
-            Config validatorConfig = Utility.getHoconConfig(config, "validator.config.file.path");
+            Config validatorConfig = Utility.getHoconConfig(config, "vac.validator.config.file.path");
             
         	//intialize transformer factory
-        	ValidatorFactory.initialize( config.get( "custom.valid.factory.class"), validatorConfig );
+        	ValidatorFactory.initialize( config.get( "vac.custom.valid.factory.class"), validatorConfig );
 
         	//build validator objects
             int[] ordinals  = validationSchema.getAttributeOrdinals();
@@ -138,7 +131,7 @@ public class ValidationChecker extends Configured implements Tool {
             //validators from try prop file configuration
             boolean foundInPropConfig = false;
             for (int ord : ordinals ) {
-            	String key = "validator." + ord;
+            	String key = "vac.validator." + ord;
             	String validatorString = config.get(key);
             	if (null != validatorString ) {
             		String[] valTags = validatorString.split(fieldDelimOut);
@@ -175,11 +168,11 @@ public class ValidationChecker extends Configured implements Tool {
     		for (String valTag :  valTags) {
     			if (valTag.equals("zscoreBasedRange")) {
     				//z score based
-    				getAttributeStats(config, "stat.file.path");
+    				getAttributeStats(config, "vac.stat.file.path");
     				validatorList.add(ValidatorFactory.create(valTag, prAttr, validatorContext));
     			} if (valTag.equals("robustZscoreBasedRange")) {
     				//robust z score based
-    				getAttributeMeds(config, "med.stat.file.path", "mad.stat.file.path", idOrdinals);
+    				getAttributeMeds(config, "vac.med.stat.file.path", "vac.mad.stat.file.path", idOrdinals);
     				validatorList.add(ValidatorFactory.create(valTag, prAttr,validatorContext));
     			} else {
     				//normal
@@ -223,7 +216,7 @@ public class ValidationChecker extends Configured implements Tool {
 				InterruptedException {
 			super.cleanup(context);
         	Configuration config = context.getConfiguration();
-            OutputStream os = Utility.getAppendFileOutputStream(config, "invalid.data.file.path");
+            OutputStream os = Utility.getAppendFileOutputStream(config, "vac.invalid.data.file.path");
 			
             for (InvalidData invalidData : invalidDataList ) {
             	byte[] data = invalidData.toString().getBytes();
@@ -240,7 +233,7 @@ public class ValidationChecker extends Configured implements Tool {
         @Override
         protected void map(LongWritable key, Text value, Context context)
             throws IOException, InterruptedException {
-            items  =  value.toString().split(fieldDelimRegex);
+            items  =  value.toString().split(fieldDelimRegex, -1);
             stBld.delete(0, stBld.length());
             valid = true;
             InvalidData invalidData = null;
@@ -268,7 +261,7 @@ public class ValidationChecker extends Configured implements Tool {
             	}
             }
             
-            if (valid || !filterInvalidRecords ) {
+            if (null == invalidData || !filterInvalidRecords ) {
             	outVal.set(value.toString());
             	context.write(NullWritable.get(), outVal);
             }

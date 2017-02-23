@@ -37,7 +37,7 @@ import org.apache.hadoop.conf.Configuration;
 public class NumericalAttrStatsManager {
 	private Map<Integer, List<Tuple>> stats = new HashMap<Integer, List<Tuple>>();
 	private Map<String, Map<Integer, List<Tuple>>> keyedStats = new HashMap<String, Map<Integer, List<Tuple>>>();
-	private static final String DEF_COND_ATTR_VAL = "0";
+	private static final String DEF_COND_ATTR_VAL = "$";
 	
 	/**
 	 * Stats for data
@@ -46,9 +46,32 @@ public class NumericalAttrStatsManager {
 	 * @param delim
 	 * @throws IOException
 	 */
-	public NumericalAttrStatsManager(Configuration config, String statsFilePath, String delim) 
+	public NumericalAttrStatsManager(Configuration config, String statsFilePathParam, String delim) 
 		throws IOException {
-    	InputStream fs = Utility.getFileStream(config, statsFilePath);
+    	InputStream fs = Utility.getFileStream(config, statsFilePathParam);
+    	initialize(fs, delim);
+
+	}
+
+	/**
+	 * @param statsFilePath
+	 * @param delim
+	 * @param fromFilePath
+	 * @throws IOException
+	 */
+	public NumericalAttrStatsManager(String statsFilePath, String delim, boolean fromFilePath) 
+			throws IOException {
+	    	InputStream fs = Utility.getFileStream(statsFilePath);
+	    	initialize(fs, delim);
+		}
+
+	/**
+	 * @param fs
+	 * @param delim
+	 * @throws NumberFormatException
+	 * @throws IOException
+	 */
+	private void initialize(InputStream fs, String delim) throws NumberFormatException, IOException {
     	BufferedReader reader = new BufferedReader(new InputStreamReader(fs));
     	String line = null; 
     	String[] items = null;
@@ -57,14 +80,15 @@ public class NumericalAttrStatsManager {
     	while((line = reader.readLine()) != null) {
     		items = line.split(delim);
     		Tuple tuple = new Tuple();
+    		int i = 0;
     		Integer attr = Integer.parseInt(items[0]);
-    		tuple.add(Tuple.STRING, items[1]);
-    		tuple.add(Tuple.DOUBLE, items[2]);
-    		tuple.add(Tuple.DOUBLE, items[3]);
-    		tuple.add(Tuple.INT, items[4]);
-    		tuple.add(Tuple.DOUBLE, items[5]);
-    		tuple.add(Tuple.DOUBLE, items[6]);
-    		tuple.add(Tuple.DOUBLE, items[7]);
+    		tuple.add(Tuple.STRING, items[i++]);
+    		tuple.add(Tuple.DOUBLE, items[i++]);
+    		tuple.add(Tuple.DOUBLE, items[i++]);
+    		tuple.add(Tuple.INT, items[i++]);
+    		tuple.add(Tuple.DOUBLE, items[i++]);
+    		tuple.add(Tuple.DOUBLE, items[i++]);
+    		tuple.add(Tuple.DOUBLE, items[i++]);
     		
     		List<Tuple> statList = stats.get(attr);
     		if (null ==  statList ) {
@@ -74,7 +98,7 @@ public class NumericalAttrStatsManager {
     		statList.add( tuple);
     	}
 	}
-
+	
 	/**
 	 * @param statsContent
 	 * @param delim
@@ -90,14 +114,15 @@ public class NumericalAttrStatsManager {
 			  line = scanner.nextLine();
 	    		items = line.split(delim);
 	    		Tuple tuple = new Tuple();
+	    		int i = 0;
 	    		Integer attr = Integer.parseInt(items[0]);
-	    		tuple.add(Tuple.STRING, items[1]);
-	    		tuple.add(Tuple.DOUBLE, items[2]);
-	    		tuple.add(Tuple.DOUBLE, items[3]);
-	    		tuple.add(Tuple.INT, items[4]);
-	    		tuple.add(Tuple.DOUBLE, items[5]);
-	    		tuple.add(Tuple.DOUBLE, items[6]);
-	    		tuple.add(Tuple.DOUBLE, items[7]);
+	    		tuple.add(Tuple.STRING, items[i++]);
+	    		tuple.add(Tuple.DOUBLE, items[i++]);
+	    		tuple.add(Tuple.DOUBLE, items[i++]);
+	    		tuple.add(Tuple.INT, items[i++]);
+	    		tuple.add(Tuple.DOUBLE, items[i++]);
+	    		tuple.add(Tuple.DOUBLE, items[i++]);
+	    		tuple.add(Tuple.DOUBLE, items[i++]);
 	    		
 	    		List<Tuple> statList = stats.get(attr);
 	    		if (null ==  statList ) {
@@ -161,7 +186,11 @@ public class NumericalAttrStatsManager {
 	 */
 	private Tuple getStats(int attr, String condAttrVal) {
 		Tuple foundTuple = null;
+		
+		//for all cond attribute values
 		List<Tuple> statList = stats.get(attr);
+		
+		//search by cond attribute
 		for (Tuple tuple : statList) {
 			if (tuple.getString(0).equals(condAttrVal)) {
 				foundTuple = tuple;

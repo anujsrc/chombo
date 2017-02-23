@@ -37,15 +37,16 @@ import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 import org.chombo.transformer.AttributeTransformer;
+import org.chombo.transformer.ContextAwareTransformer;
 import org.chombo.transformer.TransformerFactory;
-import org.chombo.util.GenericAttributeSchema;
+import org.chombo.util.BasicUtils;
 import org.chombo.util.ProcessorAttribute;
 import org.chombo.util.ProcessorAttributeSchema;
 import org.chombo.util.Utility;
-import org.codehaus.jackson.map.ObjectMapper;
+import org.chombo.validator.Validator;
+import org.chombo.validator.ValidatorFactory;
 
 import com.typesafe.config.Config;
-import com.typesafe.config.ConfigException;
 
 /**
  * Transforms attributes based on plugged in transformers for different attributes.
@@ -125,6 +126,8 @@ public class Transformer extends Configured implements Tool {
         private Config transformerConfig;
         private boolean configDriven;
         private int fieldOrd;;
+        private int numFields;
+        private Map<String, Object> context = new HashMap<String, Object>();
        
         /* (non-Javadoc)
          * @see org.apache.hadoop.mapreduce.Mapper#setup(org.apache.hadoop.mapreduce.Mapper.Context)
@@ -133,47 +136,116 @@ public class Transformer extends Configured implements Tool {
         	Configuration config = context.getConfiguration();
         	fieldDelimRegex = config.get("field.delim.regex", "\\[\\]");
         	fieldDelimOut = config.get("field.delim", ",");
+        	numFields = config.getInt("tra.num.fields", -1);
         	
-        	//transformer schema
-        	configDriven = config.get("transformer.schema.file.path") != null;
-        	if (configDriven) {
-        		//schema
-	        	transformerSchema = Utility.getProcessingSchema(config, "transformer.schema.file.path");
-	        	transformerSchema.validateTargetAttributeMapping();
-	        	
-	        	//transformer config
-	        	transformerConfig = Utility.getHoconConfig(config, "transformer.config.file.path");
-	        	
-	        	//intialize transformer factory
-	        	TransformerFactory.initialize( config.get( "custom.trans.factory.class"), transformerConfig);
+        	//schema
+        	transformerSchema = Utility.getProcessingSchema(config, "tra.transformer.schema.file.path");
+        	transformerSchema.validateTargetAttributeMapping();
 
+        	//transformer config
+        	transformerConfig = Utility.getHoconConfig(config, "tra.transformer.config.file.path");
+        	
+        	//intialize transformer factory
+        	TransformerFactory.initialize(config.get( "tra.custom.trans.factory.class"), transformerConfig);
+        	
+            //transformers from  prop file configuration
+            int[] ordinals  = transformerSchema.getAttributeOrdinals();
+            boolean foundInPropConfig = false;
+            for (int ord : ordinals) {
+            	String key = "tra.transformer." + ord;
+            	String transformerString = config.get(key);
+            	if (null != transformerString) {
+            		//transformer tags in property file
+            		String[] tranformerTags = transformerString.split(fieldDelimOut);
+            		createTransformers(tranformerTags,  ord);
+            		foundInPropConfig = true;
+            	}
+            }
+            
+            //generators from prop file configuration
+            if (foundInPropConfig) {
+            	for (ProcessorAttribute prAttr : transformerSchema.getAttributeGenerators()) {
+            		String key = "tra.generator." + prAttr.getOrdinal();
+                	String generatorString = config.get(key);
+            		String[] generatorTags = generatorString.split(fieldDelimOut);
+            		createGenerators(generatorTags, prAttr);
+            	}
+            }
+
+            //all schema driven
+            boolean foundInSchemaConfig = false;
+        	if (!foundInPropConfig) {
 	        	//build transformers
 	        	AttributeTransformer attrTrans;
 	        	for (ProcessorAttribute prAttr : transformerSchema.getAttributes()) {
 	        		fieldOrd = prAttr.getOrdinal();
-	        		if (null != prAttr.getTransformers()) {
-	        			for (String tranformerTag  : prAttr.getTransformers() ) {
-	        				attrTrans = TransformerFactory.createTransformer(tranformerTag, prAttr, transformerConfig);
-	        				registerTransformers(fieldOrd, attrTrans);
-	        			}
+	        		List<String> transformerTagList = prAttr.getTransformers();
+	        		if (null != transformerTagList) {
+	        			String[] transformerTags =  transformerTagList.toArray(new String[transformerTagList.size()]);
+	        			createTransformers(transformerTags, fieldOrd);
+	        			foundInSchemaConfig = true;
 	        		}
 	        	}
 	        	
 	        	//build generators
 	        	if (null != transformerSchema.getAttributeGenerators()) {
 		        	for (ProcessorAttribute prAttr : transformerSchema.getAttributeGenerators()) {
-		        		for (String tranformerTag  : prAttr.getTransformers() ) {
-		        			attrTrans = TransformerFactory.createTransformer(tranformerTag, prAttr, transformerConfig);
-		        			registerGenerators(attrTrans);
-		        		}
+		        		List<String> generatorTagList = prAttr.getTransformers();
+		        		String[] generatorTags =  generatorTagList.toArray(new String[generatorTagList.size()]);
+		        		createGenerators(generatorTags, prAttr);
 		        	}
 	        	}
-	        	
-	        	//output
-	        	itemsOut = new String[transformerSchema.findDerivedAttributeCount()];
         	}
+        	
+        	//transformers and generator created from configuration
+        	configDriven = foundInPropConfig || foundInSchemaConfig;
+        	
+        	//output
+        	itemsOut = new String[transformerSchema.findDerivedAttributeCount()];
        }
+
+        /**
+         * @param tranformerTags
+         * @param ord
+         * @throws IOException
+         */
+        private void createTransformers(String[] tranformerTags,  int ord) 
+        		throws IOException {
+        	//create all transformers for  a field
+			ProcessorAttribute prAttr = transformerSchema.findAttributeByOrdinal(ord);
+			AttributeTransformer attrTrans = null;
+    		for (String transformerTag :  tranformerTags) {
+    			//check if side data is needed
+    			Config tranConfig = TransformerFactory.getTransformerConfig(transformerConfig , transformerTag, prAttr);
+    			InputStream inStrm = null;
+    			if (tranConfig.hasPath("hdfsDataPath")) {
+    				inStrm = Utility.getFileStream(tranConfig.getString("hdfsDataPath"));
+    			} else if (tranConfig.hasPath("fsDataPath")) {
+    				inStrm = BasicUtils.getFileStream(tranConfig.getString("fsDataPath"));
+    			}
+    			
+    			if (null == inStrm) {
+    				attrTrans = TransformerFactory.createTransformer(transformerTag, prAttr, transformerConfig);
+    			} else {
+    				attrTrans = TransformerFactory.createTransformer(transformerTag, prAttr, transformerConfig, inStrm);
+    			}
+				registerTransformers(ord, attrTrans);
+    		}
+        }
         
+        /**
+         * @param generatorTags
+         * @param prAttr
+         * @throws IOException
+         */
+        private void createGenerators(String[] generatorTags,  ProcessorAttribute prAttr) 
+        		throws IOException {
+			AttributeTransformer attrTrans = null;
+        	for (String generatorTag : generatorTags) {
+        		attrTrans = TransformerFactory.createTransformer(generatorTag, prAttr, transformerConfig);
+    			registerGenerators(attrTrans);
+        	}
+        }
         
         /**
          * @param fieldOrd
@@ -205,11 +277,19 @@ public class Transformer extends Configured implements Tool {
         @Override
         protected void map(LongWritable key, Text value, Context context)
             throws IOException, InterruptedException {
-            items  =  value.toString().split(fieldDelimRegex);
+            if (numFields > 0){
+            	//validate with field count
+            	items = Utility.splitFields(value.toString(), fieldDelimRegex, numFields, false);
+            	if (null == items) {
+            		return;
+            	}
+            } else {
+                items  =  value.toString().split(fieldDelimRegex, -1);
+            }
+            
             stBld.delete(0, stBld.length());
             if (configDriven) {
             	//using configuration based transformers
-            	
             	//transformers
             	getTranformedAttributes(transformerSchema.getAttributes(), true);
 	        	
@@ -231,6 +311,9 @@ public class Transformer extends Configured implements Tool {
 		            	//all transformers
 		            	for (AttributeTransformer trans :  transformerList) {
 			        		if (null !=trans) {
+			            		//check if we need to set context data
+			            		setTransformerContext(trans);
+			        			
 			        			transformedValues = trans.tranform(source);
 			        			if (transformerList.size() > 1 && t <  transformerList.size() -1 && transformedValues.length > 1 ) {
 			        				//only last transformer is allowed to emit multiple values
@@ -282,6 +365,9 @@ public class Transformer extends Configured implements Tool {
             	transformedValues = null;
             	if (null != transformerList) {
 	            	for (AttributeTransformer trans :  transformerList) {
+	            		//check if we need to set context data
+	            		setTransformerContext(trans);
+	            		
 	        			transformedValues = trans.tranform(source);
 	        			if (transformerList.size() > 1 && t <  transformerList.size() -1 && transformedValues.length > 1 ) {
 	        				//only last transformer is allowed to emit multiple values
@@ -312,7 +398,20 @@ public class Transformer extends Configured implements Tool {
         	}
         	
         }
+        
+    	/**
+    	 * @param trans
+    	 */
+    	private void setTransformerContext(AttributeTransformer trans) {
+    		if (trans instanceof ContextAwareTransformer) {
+    			context.clear();
+    			context.put("record", items);
+    			((ContextAwareTransformer)trans).setContext(context);
+    		}
+    	}
+        
 	}
+	
 	
 	/**
 	 * @author pranab

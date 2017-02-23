@@ -18,13 +18,24 @@
 
 package org.chombo.util;
 
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+
 /**
  * @author pranab
  *
  */
 public class StringAttributePredicate extends AttributePredicate {
 	private String value;
+	private Set<String> valueSet;
 
+	/**
+	 * 
+	 */
+	public StringAttributePredicate() {
+	}
+	
 	/**
 	 * @param attribute
 	 * @param operator
@@ -32,23 +43,64 @@ public class StringAttributePredicate extends AttributePredicate {
 	 */
 	public StringAttributePredicate(int attribute, String operator, String value) {
 		super(attribute, operator);
+		build(attribute, operator, value);
+	}
+
+	/**
+	 * @param attribute
+	 * @param operator
+	 * @param value
+	 */
+	public void build(int attribute, String operator, String value) {
+		this.attribute = attribute;
+		this.operator = operator;
 		this.value = value;
+		if (null != context) {
+			//large value set
+			valueSet = (Set<String>)context.get(value);
+		} else {
+			String[] valueItems = value.split(VALUE_LIST_SEP);
+			if (valueItems.length > 1) {
+				//create value set
+				valueSet = new HashSet<String>();
+				for (String val : valueItems) {
+					valueSet.add(val);
+				}
+			}
+		}
+	}
+	
+	
+	@Override
+	public boolean evaluate(String[] record) {
+		String operand = record[attribute];
+		return evaluateHelper(operand);
 	}
 
 	@Override
-	public boolean evaluate(String[] record) {
+	public boolean evaluate(String field) {
+		return evaluateHelper(field);
+	}
+
+	/**
+	 * @param operand
+	 * @return
+	 */
+	private boolean evaluateHelper(String operand) {
 		boolean status = false;
-		String operand = record[attribute];
 		if (operator.equals(GREATER_THAN)) {
 			status = operand.compareTo(value) > 0;
 		} else if (operator.equals(LESS_THAN)) {
 			status = operand.compareTo(value) < 0;
 		} else if (operator.equals(EQUAL_TO)) {
 			status = operand.equals(value);
-		}  else {
+		} else if (operator.equals(IN)) {
+			status = valueSet.contains(operand);
+		} else if (operator.equals(NOT_IN)) {
+			status = !valueSet.contains(operand);
+		} else {
 			throw new IllegalArgumentException("invalid operator");
 		}
 		return status;
 	}
-
 }

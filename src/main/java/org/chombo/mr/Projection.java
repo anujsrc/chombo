@@ -18,6 +18,7 @@
 package org.chombo.mr;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -40,6 +41,9 @@ import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 import org.chombo.redis.RedisCache;
+import org.chombo.util.AttributeFilter;
+import org.chombo.util.BasicUtils;
+import org.chombo.util.RowColumnFilter;
 import org.chombo.util.SecondarySort;
 import org.chombo.util.Tuple;
 import org.chombo.util.Utility;
@@ -79,7 +83,7 @@ public class Projection extends Configured implements Tool {
             job.setNumReduceTasks(numReducer);
             
             //order by
-        	boolean doOrderBy = job.getConfiguration().getInt("orderBy.field", -1) >= 0;
+        	boolean doOrderBy = job.getConfiguration().getInt("pro.orderBy.field", -1) >= 0;
         	if (doOrderBy) {
                 job.setGroupingComparatorClass(SecondarySort.TuplePairGroupComprator.class);
                 job.setPartitionerClass(SecondarySort.TupleTextPartitioner.class);
@@ -107,22 +111,53 @@ public class Projection extends Configured implements Tool {
 		private int[]  projectionFields;
         private String fieldDelimRegex;
         private String fieldDelimOut;
+        private AttributeFilter attrFilter;
+        private RowColumnFilter rowColFilter = new RowColumnFilter();
+        private boolean idIncluded;
 
         protected void setup(Context context) throws IOException, InterruptedException {
         	Configuration config = context.getConfiguration();
-        	keyField = config.getInt("key.field", 0);
-        	fieldDelimRegex = config.get("field.delim.regex", "\\[\\]");
+        	keyField = config.getInt("pro.key.field", 0);
+        	fieldDelimRegex = config.get("field.delim.regex", ",");
         	fieldDelimOut = config.get("field.delim", ",");
-        	projectionFields = Utility.intArrayFromString(config.get("projection.field"),fieldDelimRegex );
+        	String fileterFieldDelimRegex = config.get("pro.filter.field.delim.regex", ",");
+        	
+        	//projection
+        	projectionFields = Utility.intArrayFromString(config.get("pro.projection.field"),fieldDelimRegex );
+        	if (null == projectionFields) {
+        		//projected field from the output of another MR
+        		projectionFields = findIncludedColumns(config, rowColFilter);
+        	}
+        	idIncluded = config.getBoolean("pro.id.incuded.in.projection", true);
+        	
+        	
+        	//selection
+        	String selectFilter = config.get("pro.select.filter");
+        	if (null != selectFilter) {
+        		String notInSetName = config.get("pro.operator.notin.set.name");
+        		if (null == notInSetName) {
+        			attrFilter = new AttributeFilter(selectFilter);
+        		} else {
+               		//bulk data for in or notin operator
+        			attrFilter =  new AttributeFilter();
+            		createExcludedRowsContext( config,  rowColFilter,attrFilter, selectFilter);
+            	}
+        	} 
        }
         
         @Override
         protected void map(LongWritable key, Text value, Context context)
             throws IOException, InterruptedException {
-            String[] items  =  value.toString().split(fieldDelimRegex);
-	        outVal.set(items[keyField] + fieldDelimOut +  Utility.extractFields(items , projectionFields, 
-	        		fieldDelimOut, false));
-	        context.write(NullWritable.get(), outVal);
+            String[] items  =  value.toString().split(fieldDelimRegex, -1);
+            if (null == attrFilter || attrFilter.evaluate(items)) {
+            	if (idIncluded) {
+            		outVal.set(Utility.extractFields(items , projectionFields, fieldDelimOut, false));
+            	} else {
+            		outVal.set(items[keyField] + fieldDelimOut +  Utility.extractFields(items , projectionFields, 
+            				fieldDelimOut, false));
+            	}
+            	context.write(NullWritable.get(), outVal);
+            }
         }
 	}
 	
@@ -140,21 +175,42 @@ public class Projection extends Configured implements Tool {
         private int orderByField;
         private boolean groupBy;
         private boolean isOrderByFieldNumeric;
+        private AttributeFilter attrFilter;
+        private RowColumnFilter rowColFilter = new RowColumnFilter();
         
         /* (non-Javadoc)
          * @see org.apache.hadoop.mapreduce.Mapper#setup(org.apache.hadoop.mapreduce.Mapper.Context)
          */
         protected void setup(Context context) throws IOException, InterruptedException {
         	Configuration config = context.getConfiguration();
-        	String operation = config.get("projection.operation",  "project");
+        	String operation = config.get("pro.projection.operation",  "project");
         	groupBy = operation.startsWith("grouping");
         	
-        	keyField = config.getInt("key.field", 0);
-        	fieldDelimRegex = config.get("field.delim.regex", "\\[\\]");
+        	keyField = config.getInt("pro.key.field", 0);
+        	fieldDelimRegex = config.get("field.delim.regex", ",");
         	fieldDelimOut = config.get("field.delim.out", ",");
-        	projectionFields = Utility.intArrayFromString(config.get("projection.field"),fieldDelimRegex );
-        	orderByField = config.getInt("orderBy.field", -1);
-        	isOrderByFieldNumeric = config.getBoolean("orderBy.filed.numeric", false);
+        	projectionFields = Utility.intArrayFromString(config.get("pro.projection.field"),fieldDelimRegex );
+        	if (null == projectionFields) {
+        		//projected field from the output of another MR
+        		projectionFields = findIncludedColumns(config, rowColFilter);
+        	}
+        	
+        	//order by
+        	orderByField = config.getInt("pro.orderBy.field", -1);
+        	isOrderByFieldNumeric = config.getBoolean("pro.orderBy.filed.numeric", false);
+        	
+        	//selection
+        	String selectFilter = config.get("pro.select.filter");
+        	if (null != selectFilter) {
+        		String notInSetName = config.get("pro.operator.notin.set.name");
+        		if (null == notInSetName) {
+        			attrFilter = new AttributeFilter(selectFilter);
+        		} else {
+               		//bulk data for in or notin operator
+        			attrFilter =  new AttributeFilter();
+            		createExcludedRowsContext( config,  rowColFilter,attrFilter, selectFilter);
+            	}
+        	}
        }
 
         /* (non-Javadoc)
@@ -163,19 +219,23 @@ public class Projection extends Configured implements Tool {
         @Override
         protected void map(LongWritable key, Text value, Context context)
             throws IOException, InterruptedException {
-            String[] items  =  value.toString().split(fieldDelimRegex);
-        	outKey.initialize();
-            if (orderByField >= 0) {
-            	if (isOrderByFieldNumeric) {
-               		outKey.add(items[keyField],Double.parseDouble( items[orderByField]));
-            	} else {
-            		outKey.add(items[keyField], items[orderByField]);
-            	}
-            } else {
-            	outKey.add(items[keyField]);
+            String[] items  =  value.toString().split(fieldDelimRegex, -1);
+            if (null == attrFilter || attrFilter.evaluate(items)) {
+	        	outKey.initialize();
+	            if (orderByField >= 0) {
+	            	//group by and order by
+	            	if (isOrderByFieldNumeric) {
+	               		outKey.add(items[keyField],Double.parseDouble( items[orderByField]));
+	            	} else {
+	            		outKey.add(items[keyField], items[orderByField]);
+	            	}
+	            } else {
+	            	//group by
+	            	outKey.add(items[keyField]);
+	            }
+	        	outVal.set( Utility.extractFields(items , projectionFields, fieldDelimOut, false));
+	        	context.write(outKey, outVal);
             }
-        	outVal.set( Utility.extractFields(items , projectionFields, fieldDelimOut, false));
-        	context.write(outKey, outVal);
         }
 	}
 	
@@ -211,20 +271,20 @@ public class Projection extends Configured implements Tool {
 		protected void setup(Context context) throws IOException, InterruptedException {
         	Configuration config = context.getConfiguration();
         	fieldDelim = config.get("field.delim.out", "[]");
-        	if (!StringUtils.isBlank(config.get("agrregate.fumctions"))) {
-        		aggrFunctions = config.get("agrregate.fumctions").split(fieldDelim);
+        	if (!StringUtils.isBlank(config.get("pro.agrregate.fumctions"))) {
+        		aggrFunctions = config.get("pro.agrregate.fumctions").split(fieldDelim);
         		aggrFunctionValues = new int[aggrFunctions.length];
         		aggrFunctionValuesMax = new int[aggrFunctions.length];
         		for (int i = 0; i < aggrFunctionValuesMax.length;  ++i) {
         			aggrFunctionValuesMax[i] = Integer.MIN_VALUE;
         		}
-				aggregateValueKeyPrefix = config.get("aggregate.value.key.prefix");
+				aggregateValueKeyPrefix = config.get("pro.aggregate.value.key.prefix");
 	        	redisCache = RedisCache.createRedisCache(config, "ch");
         	}
-        	sortOrderAscending = config.getBoolean("sort.order.ascending", true);
-        	limitTo = config.getInt("limit.to", -1);
-        	formatCompact = config.getBoolean("format.compact", true);
-        	useRank = config.getBoolean("use.rank", false);
+        	sortOrderAscending = config.getBoolean("pro.sort.order.ascending", true);
+        	limitTo = config.getInt("pro.limit.to", -1);
+        	formatCompact = config.getBoolean("pro.format.compact", true);
+        	useRank = config.getBoolean("pro.use.rank", false);
        }
 
 		/* (non-Javadoc)
@@ -443,6 +503,47 @@ public class Projection extends Configured implements Tool {
     	}
     }
  
+    /**
+     * @param config
+     * @param rowColFilter
+     * @return
+     * @throws IOException
+     */
+    public static int[] findIncludedColumns(Configuration config, RowColumnFilter rowColFilter) throws IOException {
+		//projected field from the output of another MR
+    	String fileterFieldDelimRegex = config.get("pro.filter.field.delim.regex", ",");
+		InputStream colStream = Utility.getFileStream(config, "pro.exclude.columns.file");
+		if (null == colStream) {
+			throw new IllegalStateException("error aceesing excluded column file");
+		}
+		rowColFilter.processColumns(colStream, fileterFieldDelimRegex);
+		int numCols = Utility.assertIntConfigParam(config, "pro.num.fields", "missing configuration for number of fields");
+		return rowColFilter.getIncludedColOrdinals(numCols);
+    }
+    
+    /**
+     * @param config
+     * @param rowColFilter
+     * @param attrFilter
+     * @throws IOException
+     */
+    public static void createExcludedRowsContext(Configuration config, RowColumnFilter rowColFilter, 
+    		AttributeFilter attrFilter, String selectFilter) throws IOException {
+    	String fileterFieldDelimRegex = config.get("pro.filter.field.delim.regex", ",");
+		String notInSetName = config.get("pro.operator.notin.set.name");
+		
+		//notin operator with out of band set values
+		InputStream rowStream = Utility.getFileStream(config, "pro.exclude.rows.file");
+		if (null == rowStream) {
+			throw new IllegalStateException("error aceesing excluded row file");
+		}
+		rowColFilter.processRows(rowStream, fileterFieldDelimRegex);
+		String[] exclRowKeys = rowColFilter.getExcludedRowKeys();
+		Map<String, Object> setOpContext = new HashMap<String, Object>();
+		setOpContext.put(notInSetName, BasicUtils.generateSetFromArray(exclRowKeys));
+		attrFilter.withContext(setOpContext).build(selectFilter);;
+    }    
+    
 	/**
 	 * @param args
 	 */

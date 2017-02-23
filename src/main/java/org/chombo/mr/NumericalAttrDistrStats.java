@@ -96,12 +96,12 @@ public class NumericalAttrDistrStats extends Configured implements Tool {
         protected void setup(Context context) throws IOException, InterruptedException {
         	Configuration config = context.getConfiguration();
         	fieldDelimRegex = config.get("field.delim.regex", ",");
-        	attrBinWidths = Utility.assertIntIntegerDoubleMapConfigParam(config, "nads.attr.bucket.width.list", Utility.configDelim, 
+        	attrBinWidths = Utility.assertIntegerDoubleMapConfigParam(config, "nads.attr.bucket.width.list", Utility.configDelim, 
         			Utility.configSubFieldDelim, "missing attrubutes ordinals and bucket widths");
         	conditionedAttr = config.getInt("nads.conditioned.attr",-1);
         	
         	//validate attributes
-        	schema = Utility.getGenericAttributeSchema(config,  "schema.file.path");
+        	schema = Utility.getGenericAttributeSchema(config, "nads.schema.file.path");
         	if (null != schema) {
         		Set<Integer> attrSet = attrBinWidths.keySet();
         		int[] attrs = new int[attrSet.size()];
@@ -118,7 +118,7 @@ public class NumericalAttrDistrStats extends Configured implements Tool {
         @Override
         protected void map(LongWritable key, Text value, Context context)
             throws IOException, InterruptedException {
-            items  =  value.toString().split(fieldDelimRegex);
+            items  =  value.toString().split(fieldDelimRegex, -1);
         	for (int attr : attrBinWidths.keySet()) {
             	outKey.initialize();
             	outVal.initialize();
@@ -209,7 +209,7 @@ public class NumericalAttrDistrStats extends Configured implements Tool {
         	conditionedAttr = config.getInt("nads.conditioned.attr",-1);
 
         	//validation with schema
-           	schema = Utility.getGenericAttributeSchema(config,  "schema.file.path");
+           	schema = Utility.getGenericAttributeSchema(config, "nads.schema.file.path");
             if (null != schema) {
             	
             }

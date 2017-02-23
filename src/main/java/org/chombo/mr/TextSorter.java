@@ -77,15 +77,15 @@ public class TextSorter  extends Configured implements Tool {
         private String  sortFieldVal;
         
         protected void setup(Context context) throws IOException, InterruptedException {
-        	sortField = context.getConfiguration().getInt("sort.field", 0);
-        	sortOrderAscending = context.getConfiguration().getBoolean("sort.order.ascending", true);
+        	sortField = context.getConfiguration().getInt("tes.sort.field", 0);
+        	sortOrderAscending = context.getConfiguration().getBoolean("tes.sort.order.ascending", true);
         	fieldDelimRegex = context.getConfiguration().get("field.delim.regex", ",");
        }
 
         @Override
         protected void map(LongWritable key, Text value, Context context)
             throws IOException, InterruptedException {
-            String[] items  =  value.toString().split(fieldDelimRegex);
+            String[] items  =  value.toString().split(fieldDelimRegex, -1);
             
             sortFieldVal = items[sortField];
             if (!sortOrderAscending) {

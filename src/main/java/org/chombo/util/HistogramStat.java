@@ -17,26 +17,31 @@
 
 package org.chombo.util;
 
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * Histogram that c hnges as data gets added
+ * Histogram that chnges as data gets added
  * 
  * @author pranab
  *
  */
-public class HistogramStat {
+public class HistogramStat implements Serializable {
 	protected double binWidth = -1;
 	protected Map<Integer, Bin> binMap = new TreeMap<Integer, Bin>();
 	protected int count;
 	protected double sum = 0.0;
 	protected double sumSq = 0.0;
 	protected int  sampleCount;
-	protected Map<Double, Double> histogram = new HashMap<Double, Double>();
-
+	protected boolean normalized;
+	protected Map<Double, Double> histogram = new TreeMap<Double, Double>();
+	protected boolean extendedOutput;
+	protected int outputPrecision = 3;
+	private boolean debugOn = false;
+	
 	/**
 	 * @param binWidth
 	 */
@@ -67,6 +72,7 @@ public class HistogramStat {
 		count = 0;
 		sum = 0;
 		sumSq = 0;
+		normalized = false;
 	}
 
 	/**
@@ -81,6 +87,24 @@ public class HistogramStat {
 	 */
 	public void setBinWidth(double binWidth) {
 		this.binWidth = binWidth;
+	}
+	
+	/**
+	 * @param extendedOutput
+	 * @return
+	 */
+	public HistogramStat withExtendedOutput(boolean extendedOutput) {
+		this.extendedOutput = extendedOutput;
+		return this;
+	}
+	
+	/**
+	 * @param outputPrecision
+	 * @return
+	 */
+	public HistogramStat withOutputPrecision(int outputPrecision) {
+		this.outputPrecision = outputPrecision;
+		return this;
 	}
 	
 	/**
@@ -154,6 +178,10 @@ public class HistogramStat {
 	 * @param value
 	 */
 	private void addToBin(int index, double value, int count) {
+		if (debugOn) {
+			System.out.println("index: " + index + " value: " + BasicUtils.formatDouble(value, outputPrecision) + 
+					" count: " + count);
+		}
 		Bin bin = binMap.get(index);
 		if (null == bin) {
 			bin = new Bin(index);
@@ -321,6 +349,7 @@ public class HistogramStat {
 				double val = index * binWidth + binWidth / 2;
 				histogram.put(val,  ((double)binMap.get(index).count) / count);
 			}
+			normalized = true;
 		}
 		return histogram;
 	}
@@ -339,10 +368,104 @@ public class HistogramStat {
 	}
 	
 	/**
+	 * @param histStat
+	 * @return
+	 */
+	public HistogramStat merge(HistogramStat histStat) {
+		HistogramStat mergedHistStat = new HistogramStat();
+		mergedHistStat.binWidth = binWidth;
+		mergedHistStat.extendedOutput = extendedOutput;
+		mergedHistStat.outputPrecision = outputPrecision;
+		
+		//bins
+		for (Integer index : binMap.keySet()) {
+			Bin bin = binMap.get(index);
+			mergedHistStat.addBin(index, bin.count);
+		}
+		for (Integer index : histStat.binMap.keySet()) {
+			Bin bin = histStat.binMap.get(index);
+			mergedHistStat.addBin(index, bin.count);
+		}
+		
+		if (debugOn) {
+			System.out.println("merging histogram " + binsToString());
+			System.out.println("merging histogram " + histStat.binsToString());
+			System.out.println("merged histogram " +  mergedHistStat.binsToString());
+		}
+		
+		//other stats
+		mergedHistStat.count = count + histStat.count;
+		mergedHistStat.sum = sum + histStat.sum;
+		mergedHistStat.sumSq = sumSq + histStat.sumSq;
+		mergedHistStat.sampleCount = sampleCount + histStat.sampleCount;
+		
+		return mergedHistStat;
+	}
+	
+	/* (non-Javadoc)
+	 * @see java.lang.Object#toString()
+	 */
+	public String toString() {
+		StringBuilder stBld = new StringBuilder();
+		final String delim = ",";
+		if (!normalized) {
+			this.getDistribution();
+		}
+		
+		//formatting
+    	String formatter = "%." + outputPrecision + "f";
+
+		//distribution
+		stBld.append(histogram.size()).append(delim);
+		for(double x : histogram.keySet()) {
+			double y = histogram.get(x);
+			stBld.append(BasicUtils.formatDouble(x, formatter)).append(delim).
+				append(BasicUtils.formatDouble(y, formatter)).append(delim);
+		}
+		
+		//other stats
+		if (extendedOutput) {
+			String formMean = BasicUtils.formatDouble(getMean(), formatter);
+			String formMedian = BasicUtils.formatDouble(getMedian(), formatter);
+			String formStdDev = BasicUtils.formatDouble(getStdDev(), formatter);
+			String formMode = BasicUtils.formatDouble(getMode(), formatter);
+			String formQuartPer = BasicUtils.formatDouble(getQuantile(0.25), formatter);
+			String formHalfPer = BasicUtils.formatDouble(getQuantile(0.50), formatter);
+			String formThreeQuartPer = BasicUtils.formatDouble(getQuantile(0.75), formatter);
+			
+			stBld.append(formMean).append(delim).append(formMedian).append(delim).
+				append(formStdDev).append(delim).append(formMode).append(delim).
+				append(formQuartPer).append(delim).append(formHalfPer).append(delim).
+				append(formThreeQuartPer).append(delim);
+		}
+		return stBld.substring(0, stBld.length() - 1);
+	}
+	
+	/**
+	 * @return
+	 */
+	private String binsToString() {
+		StringBuilder stBld = new StringBuilder();
+		final String delim = ",";
+		
+		//formatting
+    	String formatter = "%." + outputPrecision + "f";
+
+		//distribution
+		stBld.append(binMap.size()).append(delim);
+		for(int x : binMap.keySet()) {
+			Bin y = binMap.get(x);
+			stBld.append(BasicUtils.formatDouble(x, formatter)).append(delim).
+				append(BasicUtils.formatDouble(y.count, formatter)).append(delim);
+		}
+		return stBld.substring(0, stBld.length() - 1);
+	}
+	
+	/**
 	 * @author pranab
 	 *
 	 */
-	public static class Bin implements  Comparable<Bin> {
+	public static class Bin implements  Comparable<Bin>,  Serializable {
 		private int index;
 		private int count;
 

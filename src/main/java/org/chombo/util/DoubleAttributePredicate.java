@@ -30,15 +30,35 @@ public class DoubleAttributePredicate extends AttributePredicate {
 	 * @param operator
 	 * @param value
 	 */
-	public DoubleAttributePredicate(int attribute, String operator, double value) {
+	public DoubleAttributePredicate(int attribute, String operator, String value) {
 		super(attribute, operator);
-		this.value = value;
+		this.value = Double.parseDouble(value);
 	}
 
 	@Override
+	public void build(int attribute, String operator, String value) {
+		this.attribute = attribute;
+		this.operator = operator;
+		this.value = Double.parseDouble(value);
+	}
+	
+	@Override
 	public boolean evaluate(String[] record) {
-		boolean status = false;
 		double operand = Double.parseDouble(record[attribute]);
+		return evaluateHelper(operand);
+	}
+
+	@Override
+	public boolean evaluate(String field) {
+		return evaluateHelper(Double.parseDouble(field));
+	}
+	
+	/**
+	 * @param operand
+	 * @return
+	 */
+	private boolean evaluateHelper(double operand) {
+		boolean status = false;
 		if (operator.equals(GREATER_THAN)) {
 			status = operand > value;
 		} else if (operator.equals(LESS_THAN)) {

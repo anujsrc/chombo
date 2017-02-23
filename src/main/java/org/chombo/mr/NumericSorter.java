@@ -78,15 +78,15 @@ public class NumericSorter  extends Configured implements Tool {
         private long sortFieldVal;
         
         protected void setup(Context context) throws IOException, InterruptedException {
-        	sortField = context.getConfiguration().getInt("sort.field", 0);
-        	sortOrderAscending = context.getConfiguration().getBoolean("sort.order.ascending", true);
-        	fieldDelimRegex = context.getConfiguration().get("field.delim.regex", "\\[\\]");
+        	sortField = context.getConfiguration().getInt("nus.sort.field", 0);
+        	sortOrderAscending = context.getConfiguration().getBoolean("nus.sort.order.ascending", true);
+        	fieldDelimRegex = context.getConfiguration().get("field.delim.regex", ",");
        }
 
         @Override
         protected void map(LongWritable key, Text value, Context context)
             throws IOException, InterruptedException {
-            String[] items  =  value.toString().split(fieldDelimRegex);
+            String[] items  =  value.toString().split(fieldDelimRegex, -1);
             
             sortFieldVal = Long.parseLong(items[sortField]);
             if (!sortOrderAscending) {
@@ -99,6 +99,10 @@ public class NumericSorter  extends Configured implements Tool {
         }
 	}
 	
+    /**
+     * @author pranab
+     *
+     */
     public static class NumericSorterReducer extends Reducer<LongWritable, Text, NullWritable, Text> {
     	
     	protected void reduce(LongWritable key, Iterable<Text> values, Context context)

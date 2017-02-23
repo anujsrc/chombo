@@ -90,14 +90,14 @@ public class TokenCounter extends Configured implements Tool {
         
         protected void setup(Context context) throws IOException, InterruptedException {
 			Configuration conf = context.getConfiguration();
-        	tokenDelimRegex = conf.get("token.delim.regex", "\\s+");
-        	positionalToken = conf.getBoolean("positional.token", false);
+        	tokenDelimRegex = conf.get("toc.token.delim.regex", "\\s+");
+        	positionalToken = conf.getBoolean("toc.positional.token", false);
         }        
         
         @Override
         protected void map(LongWritable key, Text value, Context context)
             throws IOException, InterruptedException {
-            items  =  value.toString().split(tokenDelimRegex);
+            items  =  value.toString().split(tokenDelimRegex, -1);
             int i = 0;
             for (String item : items) {
                 outKey.initialize();
@@ -154,7 +154,7 @@ public class TokenCounter extends Configured implements Tool {
             	LOG.setLevel(Level.DEBUG);
             }
         	fieldDelim = conf.get("field.delim.out", ",");
-        	countMinThreshold = conf.getInt("count.min.threshold", -1);
+        	countMinThreshold = conf.getInt("toc.count.min.threshold", -1);
 	   	}
 
 	   	/* (non-Javadoc)

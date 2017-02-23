@@ -23,10 +23,7 @@ import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
-
-
 
 /**
  * General purpose tuple consisting list of primitive types. Implements WritableComparable
@@ -120,6 +117,14 @@ public class Tuple  implements WritableComparable<Tuple>  {
 	 */
 	public void append(Object field) {
 		fields.add( field);
+	}
+	
+	/**
+	 * @param field
+	 * @param index
+	 */
+	public void insert(Object field, int index) {
+		fields.add(index, field);
 	}
 
 	/**
@@ -483,7 +488,9 @@ public class Tuple  implements WritableComparable<Tuple>  {
 	 */
 	public int hashCodeBase() {
 		Tuple subThis = new Tuple(fields.subList(0,fields.size()-1));
-		return subThis.hashCode();
+		int hashCode =  subThis.hashCode();
+		hashCode = hashCode < 0 ? -hashCode : hashCode;
+		return hashCode;
 	}
 	
 	/**
@@ -538,6 +545,22 @@ public class Tuple  implements WritableComparable<Tuple>  {
 	}
 	
 	/**
+	 * @param start
+	 * @return
+	 */
+	public String toStringBeg(int start) {
+		return toString(start, fields.size());
+	}
+	
+	/**
+	 * @param end
+	 * @return
+	 */
+	public String toStringEnd(int end) {
+		return toString(0, end);
+	}
+
+	/**
 	 * to string starting at given index
 	 * @param start
 	 * @param end
@@ -553,6 +576,22 @@ public class Tuple  implements WritableComparable<Tuple>  {
 			}
 		}		
 		return stBld.toString();
+	}
+
+	/**
+	 * @param offset
+	 * @return
+	 */
+	public Tuple beginningSubTuple(int offset) {
+		return subTuple(0, offset);
+	}
+	
+	/**
+	 * @param offset
+	 * @return
+	 */
+	public Tuple endSubTuple(int offset) {
+		return subTuple(offset, fields.size());
 	}
 
 	/**
@@ -605,6 +644,45 @@ public class Tuple  implements WritableComparable<Tuple>  {
 	public String[] getTupleAsArray() {
 		return subTupleAsArray(0, fields.size());
 	}
+
+	/**
+	 * @param start
+	 * @param end
+	 * @return
+	 */
+	public <T> void subTupleAsList(int start, int end, List<T> list) {
+		for (int i = start; i < end; ++i) {
+			list.add((T)get(i));
+		}
+	}
 	
+	/**
+	 * @param start
+	 * @return
+	 */
+	public <T> void subTupleAsList(int start, List<T> list) {
+		subTupleAsList(start, fields.size(), list);
+	}
+	
+	/**
+	 * @param start
+	 * @return
+	 */
+	public <T> void tupleAsList(List<T> list) {
+		subTupleAsList(0, fields.size(), list);
+	}
+
+	/**
+	 * removes duplicates and maintains same order
+	 */
+	public void removeDuplicates() {
+		List<Object> uniqueFields = new ArrayList<Object>();
+		for (Object value : fields) {
+			if (!uniqueFields.contains(value)) {
+				uniqueFields.add(value);
+			}
+		}
+		fields = uniqueFields;
+	}
 	
 }

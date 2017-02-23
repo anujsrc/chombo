@@ -21,8 +21,12 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.TimeZone;
 
+import org.chombo.util.BasicUtils;
 import org.chombo.util.ProcessorAttribute;
 import org.chombo.util.Utility;
 
@@ -166,5 +170,615 @@ public class DateTransformer  {
 			return transformed;
 		}
 	}	
+	
+	
+	/**
+	 * @author pranab
+	 *
+	 */
+	public static class ElapsedTimeTransformer extends AttributeTransformer  {
+		private SimpleDateFormat dateFormat;
+		private boolean epochTime;
+		private long refTime;
+		private String timeUnit;
+		private boolean failOnInvalid;
+		
+		/**
+		 * @param prAttr
+		 * @param config
+		 */
+		public ElapsedTimeTransformer(ProcessorAttribute prAttr, Config config) {
+			super(prAttr.getTargetFieldOrdinals().length);
+			String refDateStr = config.hasPath("refDateStr")? config.getString("refDateStr") :  null;
+			intialize(config.getString("dateFormat"), config.getString("timeZone"),
+					config.getString("timeUnit"), config.getBoolean("failOnInvalid"), refDateStr);
+		}
+		
+		/**
+		 * @param dateFormat
+		 * @param timeZone
+		 * @param failOnInvalid
+		 */
+		public ElapsedTimeTransformer(String dateFormat, String timeZone, String timeUnit, boolean failOnInvalid, 
+			String refDateStr) {
+			super(1);
+			intialize(dateFormat,  timeZone, timeUnit, failOnInvalid, refDateStr);
+		}
+
+		/**
+		 * @param dateFormatStr
+		 * @param timeZone
+		 * @param failOnInvalid
+		 */
+		private void intialize(String dateFormatStr, String timeZone, String timeUnit, boolean failOnInvalid, 
+			String refDateStr) {
+			try {
+				if (dateFormatStr.equals("epochTime")) {
+					epochTime = true;
+				} else  {
+					dateFormat = new SimpleDateFormat(dateFormatStr);
+					if (!Utility.isBlank(timeZone)) {
+						dateFormat.setTimeZone(TimeZone.getTimeZone(timeZone));
+					}
+				}
+				
+				//set reference time
+				if (null != refDateStr) {
+					if (epochTime) {
+						refTime = Long.parseLong(refDateStr);
+					} else {
+						Date refDate = dateFormat.parse(refDateStr);
+						refTime = refDate.getTime();
+					}
+				} else {
+					refTime = System.currentTimeMillis();
+				}
+				this.timeUnit = timeUnit;
+			} catch (ParseException ex) {
+				throw new IllegalArgumentException("failed to parse date " + ex.getMessage());
+			}
+		}
+
+		@Override
+		public String[] tranform(String value) {
+			long elapsed  = 0;
+			long time = 0;
+			try {
+				Date date = null;
+				if (null != dateFormat) {
+					//date format
+					date = dateFormat.parse(value);
+					time = date.getTime();
+				} else {
+					//epoch time
+					time = Long.parseLong(value);
+				}
+				if (time > refTime) {
+					elapsed = time - refTime;
+					elapsed = BasicUtils.convertTimeUnit(elapsed, timeUnit);
+					transformed[0] =  "" + elapsed;
+				} else {
+					if (failOnInvalid) {
+						throw new IllegalArgumentException("date in future");
+					} else {
+						transformed[0] =  "0";
+					}
+				}
+			} catch (ParseException ex) {
+				throw new IllegalArgumentException("failed to parse date " + ex.getMessage());
+			}
+			return transformed;
+		}
+	}	
+	
+	/**
+	 * @author pranab
+	 *
+	 */
+	public static class ContextualElapsedTimeTransformer extends AttributeTransformer implements ContextAwareTransformer {
+		private String[] fields;
+		private boolean epochTime;
+		private long refTime;
+		private String timeUnit;
+		private boolean failOnInvalid;
+		private SimpleDateFormat dateFormat;
+		private int refDateFieldOrdinal;
+		
+		/**
+		 * @param prAttr
+		 * @param config
+		 */
+		public ContextualElapsedTimeTransformer(ProcessorAttribute prAttr, Config config) {
+			super(prAttr.getTargetFieldOrdinals().length);
+			refDateFieldOrdinal = config.getInt("refDateFieldOrdinal");
+			intialize(config.getString("dateFormat"), config.getString("timeZone"),
+					config.getString("timeUnit"), config.getBoolean("failOnInvalid"));
+
+		}
+		
+		/**
+		 * @param dateFormat
+		 * @param timeZone
+		 * @param timeUnit
+		 * @param failOnInvalid
+		 */
+		public ContextualElapsedTimeTransformer(String dateFormat, String timeZone, String timeUnit, boolean failOnInvalid) {
+			super(1);
+			intialize(dateFormat,  timeZone, timeUnit, failOnInvalid);
+		}
+
+		/**
+		 * @param dateFormatStr
+		 * @param timeZone
+		 * @param timeUnit
+		 * @param failOnInvalid
+		 */
+		private void intialize(String dateFormatStr, String timeZone, String timeUnit, boolean failOnInvalid) {
+			if (dateFormatStr.equals("epochTime")) {
+				epochTime = true;
+			} else  {
+				dateFormat = new SimpleDateFormat(dateFormatStr);
+				if (!Utility.isBlank(timeZone)) {
+					dateFormat.setTimeZone(TimeZone.getTimeZone(timeZone));
+				}
+			}
+			this.timeUnit = timeUnit;
+		}
+		
+		@Override
+		public void setContext(Map<String, Object> context) {
+			fields = (String[])context.get("record");
+		}
+
+		@Override
+		public String[] tranform(String value) {
+			long elapsed  = 0;
+			long time = 0;
+			try {
+				//reference date time
+				String refDateStr = fields[refDateFieldOrdinal];
+				if (epochTime) {
+					refTime = Long.parseLong(refDateStr);
+				} else {
+					Date refDate = dateFormat.parse(refDateStr);
+					refTime = refDate.getTime();
+				}
+
+				Date date = null;
+				if (null != dateFormat) {
+					//date format
+					date = dateFormat.parse(value);
+					time = date.getTime();
+				} else {
+					//epoch time
+					time = Long.parseLong(value);
+				}
+				if (time > refTime) {
+					elapsed = time - refTime;
+					elapsed = BasicUtils.convertTimeUnit(elapsed, timeUnit);
+					transformed[0] =  "" + elapsed;
+				} else {
+					if (failOnInvalid) {
+						throw new IllegalArgumentException("date in future");
+					} else {
+						transformed[0] =  "0";
+					}
+				}
+			} catch (ParseException ex) {
+				throw new IllegalArgumentException("failed to parse date " + ex.getMessage());
+			}
+			return transformed;
+		}
+		
+	}
+	
+	/**
+	 * @author pranab
+	 *
+	 */
+	public static class TimeCyclicShiftTransformer extends AttributeTransformer  {
+		private SimpleDateFormat dateFormat;
+		private boolean epochTime;
+		private long refTime;
+		private String timeUnit;
+		private boolean failOnInvalid;
+		
+		/**
+		 * @param prAttr
+		 * @param config
+		 */
+		public TimeCyclicShiftTransformer(ProcessorAttribute prAttr, Config config) {
+			super(prAttr.getTargetFieldOrdinals().length);
+			String refDateStr = config.hasPath("refDateStr")? config.getString("refDateStr") :  null;
+			intialize(config.getString("dateFormat"), config.getString("timeZone"),
+					config.getString("timeUnit"), config.getBoolean("failOnInvalid"), refDateStr);
+		}
+		
+		/**
+		 * @param dateFormat
+		 * @param timeZone
+		 * @param failOnInvalid
+		 */
+		public TimeCyclicShiftTransformer(String dateFormat, String timeZone, String timeUnit, boolean failOnInvalid, 
+			String refDateStr) {
+			super(1);
+			intialize(dateFormat,  timeZone, timeUnit, failOnInvalid, refDateStr);
+		}
+
+		/**
+		 * @param dateFormatStr
+		 * @param timeZone
+		 * @param failOnInvalid
+		 */
+		private void intialize(String dateFormatStr, String timeZone, String timeUnit, boolean failOnInvalid, 
+			String refDateStr) {
+			try {
+				dateFormat = new SimpleDateFormat(dateFormatStr);
+				if (!Utility.isBlank(timeZone)) {
+					dateFormat.setTimeZone(TimeZone.getTimeZone(timeZone));
+				}
+				
+				//set reference time
+				if (null != refDateStr) {
+					Date refDate = dateFormat.parse(refDateStr);
+					refTime = refDate.getTime();
+				} else {
+					refTime = System.currentTimeMillis();
+				}
+				this.timeUnit = timeUnit;
+			} catch (ParseException ex) {
+				throw new IllegalArgumentException("failed to parse date " + ex.getMessage());
+			}
+		}
+		
+		@Override
+		public String[] tranform(String value) {
+			try {
+				Calendar date = Calendar.getInstance();
+				date.setTime(dateFormat.parse(value));
+				for (long time = date.getTimeInMillis(); time < refTime; time = date.getTimeInMillis()) {
+					if (timeUnit.equals(BasicUtils.TIME_UNIT_MONTH)) {
+						date.add(Calendar.MONTH, 1);
+					} else if (timeUnit.equals(BasicUtils.TIME_UNIT_QUARTER)) {
+						date.add(Calendar.MONTH, 3);
+					} else if (timeUnit.equals(BasicUtils.TIME_UNIT_SEMI_ANNUAL)) {
+						date.add(Calendar.MONTH, 6);
+					} else if (timeUnit.equals(BasicUtils.TIME_UNIT_YEAR)) {
+						date.add(Calendar.YEAR, 1);
+					} else {
+						throw new IllegalStateException("invalid time cycle unit for time shift");
+					}
+				}
+				transformed[0] = dateFormat.format(date.getTime());
+			} catch (ParseException ex) {
+				throw new IllegalArgumentException("failed to parse date " + ex.getMessage());
+			}
+			return transformed;
+		}		
+	}	
+	
+	
+	/**
+	 * @author pranab
+	 *
+	 */
+	public static class ContextualTimeCyclicShiftTransformer extends AttributeTransformer implements ContextAwareTransformer {
+		private SimpleDateFormat dateFormat;
+		private long refTime;
+		private String timeUnit;
+		private String[] fields;
+		private int timeUnitColOrd;
+		private int refDateColOrd;
+		
+		/**
+		 * @param prAttr
+		 * @param config
+		 */
+		public ContextualTimeCyclicShiftTransformer(ProcessorAttribute prAttr, Config config) {
+			super(prAttr.getTargetFieldOrdinals().length);
+			int refDateColOrd = config.hasPath("refDateColOrd")? config.getInt("refDateColOrd") :  -1;
+			String refDateStr = config.hasPath("refDateStr")? config.getString("refDateStr") :  null;
+			int timeUnitColOrd = config.hasPath("timeUnitColOrd")? config.getInt("timeUnitColOrd") :  -1;
+			String timeUnit = config.hasPath("timeUnit")? config.getString("timeUnit") :  null;
+			intialize(config.getString("dateFormat"), config.getString("timeZone"),
+					timeUnitColOrd, timeUnit, config.getBoolean("failOnInvalid"), refDateColOrd, refDateStr);
+		}
+		
+		/**
+		 * @param dateFormat
+		 * @param timeZone
+		 * @param failOnInvalid
+		 */
+		public ContextualTimeCyclicShiftTransformer(String dateFormat, String timeZone, int timeUnitColOrd, 
+			String timeUnit, boolean failOnInvalid, int refDateColOrd, String refDateStr) {
+			super(1);
+			intialize(dateFormat,  timeZone, timeUnitColOrd, timeUnit, failOnInvalid, refDateColOrd, refDateStr);
+		}
+
+		/**
+		 * @param dateFormatStr
+		 * @param timeZone
+		 * @param failOnInvalid
+		 */
+		private void intialize(String dateFormatStr, String timeZone, int timeUnitColOrd, String timeUnit, 
+			boolean failOnInvalid, int refDateColOrd, String refDateStr) {
+			try {
+				dateFormat = new SimpleDateFormat(dateFormatStr);
+				if (!Utility.isBlank(timeZone)) {
+					dateFormat.setTimeZone(TimeZone.getTimeZone(timeZone));
+				}
+				
+				//set reference time
+				if (null != refDateStr) {
+					Date refDate = dateFormat.parse(refDateStr);
+					refTime = refDate.getTime();
+				} 
+				this.timeUnit = timeUnit;
+				this.timeUnitColOrd = timeUnitColOrd;
+				this.refDateColOrd = refDateColOrd;
+			} catch (ParseException ex) {
+				throw new IllegalArgumentException("failed to parse date " + ex.getMessage());
+			}
+		}
+		
+		@Override
+		public String[] tranform(String value) {
+			try {
+				//reference date
+				long thisRefTime = 0;
+				if (refDateColOrd >= 0) {
+					Date refDate = dateFormat.parse(fields[refDateColOrd]);
+					thisRefTime = refDate.getTime();
+				} else if (refTime > 0) {
+					thisRefTime = refTime;
+				} else {
+					throw new IllegalStateException("either reference date column index or global ref date must be provided");
+				}
+				
+				//time unit
+				String thisTimeUnit = null;
+				if (timeUnitColOrd >= 0) {
+					thisTimeUnit = fields[timeUnitColOrd];
+				} else if (null != timeUnit) {
+					thisTimeUnit = timeUnit;
+				} else {
+					throw new IllegalStateException("either cycle time unit column index or global cycle time unit must be provided");
+				}
+				
+				//roll forward
+				Calendar date = Calendar.getInstance();
+				date.setTime(dateFormat.parse(value));
+				for (long time = date.getTimeInMillis(); time < thisRefTime; time = date.getTimeInMillis()) {
+					if (thisTimeUnit.equals(BasicUtils.TIME_UNIT_MONTH)) {
+						date.add(Calendar.MONTH, 1);
+					} else if (thisTimeUnit.equals(BasicUtils.TIME_UNIT_QUARTER)) {
+						date.add(Calendar.MONTH, 3);
+					} else if (thisTimeUnit.equals(BasicUtils.TIME_UNIT_YEAR)) {
+						date.add(Calendar.YEAR, 1);
+					} else {
+						throw new IllegalStateException("invalid time cycle unit for time shift");
+					}
+				}
+				transformed[0] = dateFormat.format(date.getTime());
+			} catch (ParseException ex) {
+				throw new IllegalArgumentException("failed to parse date " + ex.getMessage());
+			}
+			return transformed;
+		}		
+		
+		@Override
+		public void setContext(Map<String, Object> context) {
+			fields = (String[])context.get("record");
+		}
+		
+	}	
+	
+	
+	/**
+	 * @author pranab
+	 *
+	 */
+	public static class DateComponentTransformer extends AttributeTransformer {
+		private SimpleDateFormat sourceDateFormat;
+		private Map<String, SimpleDateFormat> componentDateFormats = new HashMap<String, SimpleDateFormat>();
+		private boolean sourceEpochTime;
+		private List<String> dateComponents;
+		private Calendar cal = Calendar.getInstance();
+
+		/**
+		 * @param prAttr
+		 * @param config
+		 */
+		public DateComponentTransformer(ProcessorAttribute prAttr, Config config) {
+			super(prAttr.getTargetFieldOrdinals().length);
+			List<String> dateComponents = config.getStringList("dateComponenets");
+			
+			//component format string
+			Map<String, String> componentFormats = new HashMap<String, String>();
+			for (String dateComponent : dateComponents) {
+				if (!dateComponent.equals(BasicUtils.TIME_UNIT_QUARTER)) {
+					String compFormat = config.getString("format." + dateComponent);
+					componentFormats.put(dateComponent, compFormat);
+				}
+			}
+			
+			intialize(config.getString("sourceDateFormat"), config.getString("sourceTimeZone"),  
+					config.getStringList("dateComponenets"), componentFormats, config.getString("targetTimeZone"));
+		}
+		
+		/**
+		 * @param sourceDateFormat
+		 * @param sourceTimeZone
+		 * @param dateComponents
+		 * @param targetComponentFormats
+		 * @param targetTimeZone
+		 */
+		public DateComponentTransformer(String sourceDateFormat, String sourceTimeZone, List<String> dateComponents, 
+				Map<String, String> targetComponentFormats, 
+				String targetTimeZone) {
+			super(dateComponents.size());
+			intialize(sourceDateFormat,  sourceTimeZone, dateComponents, targetComponentFormats,  targetTimeZone);
+		}
+
+		/**
+		 * @param sourceDateFormatStr
+		 * @param sourceTimeZone
+		 * @param dateComponents
+		 * @param componentFormats
+		 * @param targetTimeZone
+		 */
+		private void intialize(String sourceDateFormatStr, String sourceTimeZone, List<String> dateComponents,  
+				Map<String, String> componentFormats, String targetTimeZone) {
+			this.dateComponents = dateComponents;
+			if (sourceDateFormatStr.equals("epochTime")) {
+				sourceEpochTime = true;
+			} else  {
+				sourceDateFormat = new SimpleDateFormat(sourceDateFormatStr);
+				if (!Utility.isBlank(sourceTimeZone)) {
+					sourceDateFormat.setTimeZone(TimeZone.getTimeZone(sourceTimeZone));
+				}
+			}
+
+			//format object for all components
+			for (Map.Entry<String,String> entry :componentFormats.entrySet()) {
+				SimpleDateFormat targetDateFormat = new SimpleDateFormat(entry.getValue());
+				if (!Utility.isBlank(targetTimeZone)) {
+					targetDateFormat.setTimeZone(TimeZone.getTimeZone(targetTimeZone));
+				}
+				componentDateFormats.put(entry.getKey(), targetDateFormat);
+			}
+		}
+
+		@Override
+		public String[] tranform(String value) {
+			try {
+				Date date = null;
+				if (null != sourceDateFormat) {
+					//date format
+					date = sourceDateFormat.parse(value);
+				} else {
+					//epoch time
+					date = new Date(Long.parseLong(value));
+				}
+				
+				int i = 0;
+				for (String dateComponent : dateComponents) {
+					if (dateComponent.equals(BasicUtils.TIME_UNIT_QUARTER)) {
+						cal.setTime(date);
+						int month = cal.get(Calendar.MONTH);
+						int quarter = month / 3 + 1;
+						transformed[i++] = "" + quarter;
+					} else {
+						SimpleDateFormat targetDateFormat = componentDateFormats.get(dateComponent);
+						transformed[i++] = targetDateFormat.format(date);
+					}
+				}
+			} catch (ParseException ex) {
+				throw new IllegalArgumentException("failed to parse date " + ex.getMessage());
+			}
+			return transformed;
+		}
+	}	
+	
+	/**
+	 * @author pranab
+	 *
+	 */
+	public static class TimeCycleTransformer extends AttributeTransformer  {
+		private SimpleDateFormat sourceDateFormat;
+		private boolean sourceEpochTime;
+		private String timeCycle;
+		private int hourGranularity;
+		private Calendar cal = Calendar.getInstance();
+		
+		/**
+		 * @param prAttr
+		 * @param config
+		 */
+		public TimeCycleTransformer(ProcessorAttribute prAttr, Config config) {
+			super(prAttr.getTargetFieldOrdinals().length);
+			intialize(config.getString("sourceDateFormat"), config.getString("sourceTimeZone"), config.getString("timeCycle"), 
+					config.getInt("hourGranularity"));
+
+		}
+		
+		/**
+		 * @param sourceDateFormatStr
+		 * @param sourceTimeZone
+		 * @param timeCycle
+		 * @param hourGranularity
+		 */
+		public TimeCycleTransformer(String sourceDateFormatStr, String sourceTimeZone, String timeCycle, int hourGranularity) {
+			super(1);
+			intialize(sourceDateFormatStr, sourceTimeZone, timeCycle, hourGranularity);
+		}
+		
+		/**
+		 * @param sourceDateFormatStr
+		 * @param sourceTimeZone
+		 * @param timeCycle
+		 * @param hourGranularity
+		 */
+		private void intialize(String sourceDateFormatStr, String sourceTimeZone, String timeCycle, int hourGranularity) {
+			if (sourceDateFormatStr.equals("epochTime")) {
+				sourceEpochTime = true;
+			} else  {
+				sourceDateFormat = new SimpleDateFormat(sourceDateFormatStr);
+				if (!Utility.isBlank(sourceTimeZone)) {
+					sourceDateFormat.setTimeZone(TimeZone.getTimeZone(sourceTimeZone));
+				}
+			}
+			this.timeCycle = timeCycle;
+			if (hourGranularity % 2 == 1) {
+				throw new IllegalStateException("hour granularity should be even");
+			}
+			this.hourGranularity = hourGranularity;
+		}
+		
+		/* (non-Javadoc)
+		 * @see org.chombo.transformer.AttributeTransformer#tranform(java.lang.String)
+		 */
+		@Override
+		public String[] tranform(String value) {
+			try {
+				Date date = null;
+				if (null != sourceDateFormat) {
+					//date format
+					date = sourceDateFormat.parse(value);
+				} else {
+					//epoch time
+					date = new Date(Long.parseLong(value));
+				}
+				cal.setTime(date);
+				
+				if (timeCycle.equals("hourOfDay")) {
+					int hour = cal.get(Calendar.HOUR_OF_DAY);
+					hour /= hourGranularity;
+					transformed[0] = "" + hour;
+				} else if (timeCycle.equals("dayOfWeek")) {
+					int day = cal.get(Calendar.DAY_OF_WEEK);
+					transformed[0] = "" + day;
+				} else if (timeCycle.equals("dayOfMonth")) {
+					int day = cal.get(Calendar.DAY_OF_MONTH);
+					transformed[0] = "" + day;
+				} else if (timeCycle.equals("monthOfYear")) {
+					int month = cal.get(Calendar.MONTH) + 1;
+					transformed[0] = "" + month;
+				} else if (timeCycle.equals("quarterOfYear")) {
+					int month = cal.get(Calendar.MONTH) + 1;
+					int quarter = (month + 2) / 3;
+					transformed[0] = "" + quarter;
+				} else {
+					throw new IllegalStateException("invalid time cycle");
+				}
+				
+			} catch (ParseException ex) {
+				throw new IllegalArgumentException("failed to parse date " + ex.getMessage());
+			}
+			return transformed;
+		}
+	
+	}
+
 	
 }

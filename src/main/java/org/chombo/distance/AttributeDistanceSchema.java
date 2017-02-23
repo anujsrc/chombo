@@ -18,6 +18,7 @@
 
 package org.chombo.distance;
 
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -25,24 +26,43 @@ import java.util.Map;
  * @author pranab
  *
  */
-public class AttributeDistanceSchema {
+public class AttributeDistanceSchema implements Serializable {
 	private AttributeDistanceAggregator[] attrAggregators;
 	private AttributeDistance[] attrDistances;
 	private Map<Integer, AttributeDistance> attributeDistanceByOrdinal = new HashMap<Integer, AttributeDistance>();
 	
+	/**
+	 * @return
+	 */
 	public AttributeDistanceAggregator[] getAttrAggregators() {
 		return attrAggregators;
 	}
+	
+	/**
+	 * @param attrAggregators
+	 */
 	public void setAttrAggregators(AttributeDistanceAggregator[] attrAggregators) {
 		this.attrAggregators = attrAggregators;
 	}
+	
+	/**
+	 * @return
+	 */
 	public AttributeDistance[] getAttrDistances() {
 		return attrDistances;
 	}
+	
+	/**
+	 * @param attrDistances
+	 */
 	public void setAttrDistances(AttributeDistance[] attrDistances) {
 		this.attrDistances = attrDistances;
 	}
 	
+	/**
+	 * @param ordinal
+	 * @return
+	 */
 	public AttributeDistance findAttributeDistanceByOrdinal(int ordinal) {
 		AttributeDistance attrDist = attributeDistanceByOrdinal.get(ordinal);
 		if (null == attrDist) {
